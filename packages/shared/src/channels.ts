@@ -105,6 +105,8 @@ export const ServiceChannels = {
   OAuth: "oauth",
   /** Provider 级认证（xAI Device OAuth 等），凭据归属具体 provider */
   ProviderAuth: "provider-auth",
+  /** 电脑控制（Kimi Computer Use）本机安装与授权状态 */
+  KimiComputerUse: "kimi-computer-use",
   /** 新 Provider Config 的设置读写 Facade */
   ProviderSettings: "provider-settings",
   /** 新 Provider Registry 的模型选择 Facade */

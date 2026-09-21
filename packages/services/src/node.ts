@@ -312,6 +312,8 @@ import { IFileWatcherService } from "./fileWatcher/fileWatcher.js";
 import { IOAuthService } from "./oauth/oauth.js";
 import { IProviderAuthService } from "./provider-auth/providerAuth.js";
 import { createProviderAuthService } from "./provider-auth/providerAuthService.js";
+import { IKimiComputerUseService } from "./kimi-computer-use/kimiComputerUse.js";
+import { createKimiComputerUseService } from "./kimi-computer-use/kimiComputerUseService.js";
 import { createZhipuProviderAuthAdapter } from "./provider-auth/zhipuProviderAuthAdapter.js";
 import { IUsageStatsService } from "./usage-stats/usageStats.js";
 import { ICodingPlanSubscriptionService } from "./coding-plan-subscription/codingPlanSubscription.js";
@@ -1643,8 +1645,7 @@ export function createLocalServices(options: {
   // 额度侧注入的是凭证解析而非 resolveHeaders：归属校验需要 providerFamily，
   // 而身份头里没有 family；身份头仍由同一个 buildOfficialMcpAuthHeaders 构造。
   const officialMcpCredentialSource = {
-    resolve: () =>
-      resolveOfficialMcpCredentials({ credentialService }),
+    resolve: () => resolveOfficialMcpCredentials({ credentialService }),
   };
   // mcpSync/hooks 里引用 zcodeAgentService 的闭包是惰性调用，声明顺序不影响初始化。
   const skillsService = createSkillsService({ isDesktopRuntime: true });
@@ -2456,6 +2457,7 @@ export function createLocalServices(options: {
     .register(IFileWatcherService, createFileWatcherService())
     .register(IOAuthService, oauthService)
     .register(IProviderAuthService, providerAuth.service)
+    .register(IKimiComputerUseService, createKimiComputerUseService())
     .register(
       IUsageStatsService,
       createUsageStatsService({

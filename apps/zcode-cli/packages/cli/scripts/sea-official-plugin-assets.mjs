@@ -43,6 +43,16 @@ export const officialSeaPlugins = [
     // 导致发布产物不 seed browser-use，进而无法装配宿主 node_repl MCP。
     version: "0.5.1",
   },
+  {
+    // 电脑控制：纯资源插件，MCP 入口为 scripts/kimi-cu-mcp.sh（KimiCU.app 由用户安装）。
+    marketplace: "zcode-plugins-official",
+    name: "computer-use",
+    packageName: "@zcode/computer-use-plugin",
+    requiresRuntime: false,
+    requiredRuntimePaths: [],
+    rootPath: join("packages", "computer-use-plugin"),
+    version: "1.0.0",
+  },
 ];
 
 export const collectSeaOfficialPluginAssets = async ({

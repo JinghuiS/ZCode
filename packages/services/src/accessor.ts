@@ -15,6 +15,7 @@ import type { ICuaPermissionService } from "./cua-permission-broker/cuaPermissio
 import type { IFileWatcherService } from "./fileWatcher/fileWatcher.js";
 import type { IOAuthService } from "./oauth/oauth.js";
 import type { IProviderAuthService } from "./provider-auth/providerAuth.js";
+import type { IKimiComputerUseService } from "./kimi-computer-use/kimiComputerUse.js";
 import type {
   IModelSelectionService,
   IProviderSettingsService,
@@ -64,6 +65,8 @@ export interface IServiceAccessor {
   readonly fileWatcherService: IFileWatcherService;
   readonly oauthService: IOAuthService;
   readonly providerAuthService: IProviderAuthService;
+  /** 电脑控制（Kimi Computer Use）本机状态；只在 Host 所在机器上生效。 */
+  readonly kimiComputerUseService: IKimiComputerUseService;
   /** 当前 Environment 的 Provider 配置与设置视图。 */
   readonly providerSettingsService: IProviderSettingsService;
   /** 当前 Environment Registry 发布的唯一模型选择 View。 */

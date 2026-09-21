@@ -215,6 +215,11 @@ export { IFileWatcherService } from "./fileWatcher/fileWatcher.js";
 // OAuth service — IOAuthService is both a type (interface) and value (descriptor)
 export { IOAuthService } from "./oauth/oauth.js";
 export { IProviderAuthService } from "./provider-auth/providerAuth.js";
+export { IKimiComputerUseService } from "./kimi-computer-use/kimiComputerUse.js";
+export type {
+  KimiComputerUsePermissions,
+  KimiComputerUseStatus,
+} from "./kimi-computer-use/kimiComputerUse.js";
 
 // UsageStats service — IUsageStatsService is both a type (interface) and value (descriptor)
 export { IUsageStatsService } from "./usage-stats/usageStats.js";

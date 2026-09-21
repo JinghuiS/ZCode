@@ -71,9 +71,12 @@ export const OFFICIAL_BROWSER_USE_REQUIRED_SEED_PATHS = [
   "skills/web-gui-tester/SKILL.md",
 ] as const;
 
+// 电脑控制由 Kimi Computer Use（kimi-cu mcp）提供：MCP 声明、启动脚本与技能缺一不可。
 const OFFICIAL_CUA_REQUIRED_SEED_PATHS = [
+  ".mcp.json",
   "docs/computer-use.md",
-  "scripts/computer-use-client.mjs",
+  "scripts/install-kimi-cu.sh",
+  "scripts/kimi-cu-mcp.sh",
   "skills/computer-use/SKILL.md",
 ] as const;
 
@@ -333,33 +336,29 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     // packages/shared/src/plugin-marketplaces.ts 的名单（bootstrap 单测机械对照两者）、
     // isZCodeCuaInternalFeatureEnabled（打包层默认 true）与输入框入口 hidden 默认值的联动语义。
     name: "computer-use",
-    hostMcpServerNames: ["node_repl"],
-    // 用户露出名统一为「Computer Use / 电脑控制」。包名与 producer 仓库仍保持 zcode-cua，
-    // 以兼容原生 Helper identity；EN 描述基线走 manifest
-    // description，这里只放 zh-CN 覆盖；resolveLocalizedText 在 en-US 时回退到 manifest。
+    // 开源版不含 zcode-cua 原生 Helper；电脑控制改由 Kimi Computer Use 的 stdio MCP 提供，
+    // 插件身份（computer-use@zcode-plugins-official）与设置入口保持不变。见 specs/computer-use-kimi.md。
     listing: {
       author: ZAI_AUTHOR,
       category: "productivity",
       displayName: "Computer Use",
       displayName_i18n: { "zh-CN": "电脑控制" },
       description_i18n: {
-        "zh-CN": "自动化桌面应用：智能体驱动鼠标、键盘与界面元素，代你完成实际任务。",
+        "zh-CN":
+          "由 Kimi Computer Use 驱动（macOS）：后台读取界面并完成点击、输入、滚动与拖拽，不抢鼠标、不切前台。",
       },
-      // 插件更名为 computer-use 后，CDN 图标仍发布在 zcode-cua 目录；沿用资源路径避免 404。
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/zcode-cua/icon.png`,
     },
     rootCandidates: [
-      "packages/zcode-cua-plugin",
-      "../zcode-cua-plugin",
-      "../../zcode-cua-plugin",
-      "../../../zcode-cua-plugin",
+      "packages/computer-use-plugin",
+      "../computer-use-plugin",
+      "../../computer-use-plugin",
+      "../../../computer-use-plugin",
     ],
     requiredSeedPaths: OFFICIAL_CUA_REQUIRED_SEED_PATHS,
-    // 当前 CUA 为不可用占位包，无需复制 native runtime；避免把本地旧依赖继续带入缓存。
+    // 纯资源插件：MCP 入口是 shell 脚本，KimiCU.app 由用户经官方脚本安装。
     runtimeTopLevelPaths: [],
-    // 这里的 version 追踪上游 zcode-cua runtime 版本，使插件 UI 展示、缓存路径、
-    // marketplace 条目都对齐；具体版本由原子 producer bump 工作流维护。
-    version: "0.6.3",
+    version: "1.0.0",
   },
 ];
 

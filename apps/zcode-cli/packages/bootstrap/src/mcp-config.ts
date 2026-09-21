@@ -185,11 +185,21 @@ function isZCodeCuaStdioServer(
   return (config.args ?? []).some(isZCodeCuaMcpPackageArg);
 }
 
+/**
+ * 电脑控制插件（computer-use@zcode-plugins-official）现由 Kimi Computer Use 提供，
+ * 其 `.mcp.json` 声明的 stdio server 名为 kimi-cu。
+ */
+const KIMI_COMPUTER_USE_MCP_SERVER_NAME = "kimi-cu";
+
 function isRetiredCuaMcpServer(name: string, config: McpServerConfig | undefined): boolean {
   // node_repl is the single supported CUA host and may share the CUA plugin's
   // authority marker; all other CUA-shaped MCP entries are retired.
+  // 修复：kimi-cu 同样带有官方电脑控制插件的 plugin id，若不豁免会被当作旧 zcode-cua 移除。
   return (
-    name !== NODE_REPL_SERVER_NAME && config !== undefined && isZCodeCuaStdioServer(name, config)
+    name !== NODE_REPL_SERVER_NAME &&
+    name !== KIMI_COMPUTER_USE_MCP_SERVER_NAME &&
+    config !== undefined &&
+    isZCodeCuaStdioServer(name, config)
   );
 }
 
