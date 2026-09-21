@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Model Provider 导航需要集中计算分组、选中项与 Coding Plan 权益态，后续拆分时再收敛。 */
 import { useEffect, useMemo } from "react";
+import { resolveProviderTemplateName, type ProviderSettingsTemplateView } from "@zcode/provider";
 import type { ProviderSettingsFormProvider } from "@/lib/providerSettingsFormTypes.js";
 import { getProviderFormLabel } from "@/lib/providerSettingsFormTypes.js";
 import type {
@@ -23,10 +24,12 @@ import {
 } from "@/settings/model-provider-section/constants.js";
 import { pickCodingPlanEntitlementProvider } from "@/lib/codingPlanProvider.js";
 import {
+  createCatalogProviderNodeKey,
   createCodingPlanProviderNodeKey,
   createCustomProviderNodeKey,
   createPresetProviderNodeKey,
 } from "@/settings/model-provider-section/utils.js";
+import { PRESET_PROVIDER_CATALOG } from "@/settings/model-provider-section/presetProviderCatalog.js";
 import {
   sortModelProvidersForDisplay,
   type ProviderOrderView,
@@ -44,6 +47,9 @@ interface PresetProviderWithConfig extends PresetProviderSpec {
 interface UseModelProviderNavigationOptions {
   presetProviders: PresetProviderWithConfig[];
   modelProviders: ProviderSettingsFormProvider[];
+  /** 打包配置中的模板；预置清单据此取名称与图标。 */
+  providerTemplates?: readonly ProviderSettingsTemplateView[];
+  locale: string;
   /**
    * 当前账号明确有权益的 Provider。缺省等价于尚无账号权益；生产设置页始终显式传入。
    */
@@ -66,6 +72,8 @@ interface UseModelProviderNavigationOptions {
 export function useModelProviderNavigation({
   presetProviders,
   modelProviders,
+  providerTemplates = [],
+  locale,
   entitledAccountProviderIds = new Set(),
   modelProvidersLoading = false,
   displayOrder,
@@ -81,13 +89,43 @@ export function useModelProviderNavigation({
   setSelectedNodeKey,
   intl,
 }: UseModelProviderNavigationOptions) {
-  const customProviders = useMemo(() => {
-    const allCustomProviders = modelProviders.filter(
+  const personalProviders = useMemo(() => {
+    const allPersonalProviders = modelProviders.filter(
       (provider) => provider.config.group === "standard-personal",
     );
     // 这里复用模型菜单的展示排序，确保设置页和聊天框供应商顺序一致。
-    return sortModelProvidersForDisplay(allCustomProviders, displayOrder);
+    return sortModelProvidersForDisplay(allPersonalProviders, displayOrder);
   }, [displayOrder, modelProviders]);
+
+  // 预置清单常驻展示：每个模板认领按展示顺序的第一个同模板 provider，其余归入自定义。
+  const { catalogItems, customProviders } = useMemo(() => {
+    const claimed = new Set<string>();
+    const templateLocale = locale === "zh-CN" ? "zh-CN" : "en-US";
+    const items = PRESET_PROVIDER_CATALOG.flatMap((entry) => {
+      const template = providerTemplates.find((item) => item.templateId === entry.templateId);
+      if (!template) return [];
+      const provider =
+        personalProviders.find((candidate) => candidate.templateId === entry.templateId) ?? null;
+      if (provider) claimed.add(provider.providerId);
+      return [
+        {
+          key: createCatalogProviderNodeKey(entry.id),
+          type: "catalog" as const,
+          entryId: entry.id,
+          templateId: entry.templateId,
+          label:
+            entry.name ?? resolveProviderTemplateName(entry.templateId, template, templateLocale),
+          logo: template.config.logo,
+          provider,
+          statusActive: provider?.executable === true,
+        },
+      ];
+    });
+    return {
+      catalogItems: items,
+      customProviders: personalProviders.filter((provider) => !claimed.has(provider.providerId)),
+    };
+  }, [locale, personalProviders, providerTemplates]);
 
   const codingPlanItems = useMemo(
     () =>
@@ -207,6 +245,7 @@ export function useModelProviderNavigation({
             };
           }),
           ...codingPlanItems.filter((item) => isStartPlanModelProviderId(item.presetId)),
+          ...catalogItems,
         ],
       },
       {
@@ -223,6 +262,7 @@ export function useModelProviderNavigation({
 
     return groups;
   }, [
+    catalogItems,
     customProviders,
     codingPlanItems,
     connectionModeCodingPlanItems,
@@ -307,10 +347,18 @@ export function useModelProviderNavigation({
       return;
     }
 
-    if (selectedNodeKey !== fallbackNodeKey) {
-      setSelectedNodeKey(fallbackNodeKey);
+    // 从预置模板创建的 provider 由预置节点承载，不存在 custom:<id> 节点。新建完成或外部入口
+    // 按 providerId 定位时要落到对应预置节点；否则会被兜底逻辑跳到第一个供应商。
+    const claimedCatalogKey = catalogItems.find(
+      (item) =>
+        item.provider && createCustomProviderNodeKey(item.provider.providerId) === selectedNodeKey,
+    )?.key;
+    const nextNodeKey = claimedCatalogKey ?? fallbackNodeKey;
+    if (selectedNodeKey !== nextNodeKey) {
+      setSelectedNodeKey(nextNodeKey);
     }
   }, [
+    catalogItems,
     fallbackNodeKey,
     selectedNavItem,
     selectedNodeKey,
@@ -522,7 +570,7 @@ export function connectionSelectionMatchesNavigationItem(
   selection: ProviderFamilyConnectionSelection,
   item: Exclude<ModelProviderNavGroup["items"][number], { type: "codingPlanLoading" }>,
 ): boolean {
-  if (item.type === "custom") return false;
+  if (item.type === "custom" || item.type === "catalog") return false;
   const familySpec = resolveModelProviderFamilySpecByProviderId(item.presetId ?? "");
   if (familySpec?.id !== family) return false;
   if (selection.kind === "start-plan") {

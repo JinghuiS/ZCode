@@ -16,14 +16,19 @@ export function createCustomProviderNodeKey(id: string): string {
   return `custom:${id}`;
 }
 
+export function createCatalogProviderNodeKey(entryId: string): string {
+  return `catalog:${entryId}`;
+}
+
 export function resolveModelProviderNavLogo(item: ModelProviderNavItem) {
   // 品牌主入口沿用 Start 导航 ID，但不能因此显示体验套餐图标。
   if (item.type === "preset") return item.logo;
+  if (item.type === "catalog") return item.provider?.config.logo ?? item.logo;
   return "provider" in item ? item.provider?.config.logo : undefined;
 }
 
 export function renderModelProviderNavIcon(item: ModelProviderNavItem): ReactNode {
-  if ("provider" in item && item.provider) {
+  if (("provider" in item && item.provider) || (item.type === "catalog" && item.logo)) {
     return <ProviderLogo logo={resolveModelProviderNavLogo(item)} className="size-4" />;
   }
   return <PackageIcon className="size-4 shrink-0" />;

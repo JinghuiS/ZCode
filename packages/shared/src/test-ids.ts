@@ -425,14 +425,8 @@ export const TID_SIDEBAR_USAGE_REMAINING_TRIGGER = "sidebar-usage-remaining-trig
 export const TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON = "sidebar-coding-plan-usage-button";
 
 // Model Provider Settings
-/** 模型供应商顶部添加按钮 */
+/** 模型供应商顶部「新建供应商」菜单按钮 */
 export const TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON = "model-provider-add-provider-button";
-/** 模型供应商 Template 选择页 */
-export const TID_MODEL_PROVIDER_TEMPLATE_PICKER = "model-provider-template-picker";
-/** 模型供应商 Template 选择项（动态后缀为 templateId，custom 表示纯自定义） */
-export const TID_MODEL_PROVIDER_TEMPLATE_ITEM = "model-provider-template-item";
-/** 模型供应商 Template 选择页返回当前 Provider 详情的按钮 */
-export const TID_MODEL_PROVIDER_TEMPLATE_BACK_BUTTON = "model-provider-template-back-button";
 /** 模型供应商左侧导航条目（动态后缀为 provider node key） */
 export const TID_MODEL_PROVIDER_NAV_ITEM = "model-provider-nav-item";
 /** 模型供应商连接方式下拉触发器 */

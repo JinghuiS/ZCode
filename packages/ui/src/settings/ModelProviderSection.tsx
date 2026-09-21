@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Model Provider 设置页需要集中编排导航、表单和 OAuth 交互，后续整体拆分时再收敛。 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { resolveProviderTemplateName, type ProviderConfigObject } from "@zcode/provider";
 import {
   getProviderFormApiKey,
   type ProviderSettingsFormProvider,
@@ -38,12 +39,15 @@ import {
 } from "./model-provider-section/constants.js";
 import { ModelProviderSectionDetail } from "./model-provider-section/Detail.js";
 import { ModelProviderSectionLayout } from "./model-provider-section/SectionLayout.js";
-import { ProviderTemplatePicker } from "./model-provider-section/ProviderTemplatePicker.js";
+import { CustomProviderCreateMenu } from "./model-provider-section/CustomProviderCreateMenu.js";
+import { PresetProviderSetupCard } from "./model-provider-section/PresetProviderSetupCard.js";
+import { PRESET_PROVIDER_CATALOG } from "./model-provider-section/presetProviderCatalog.js";
 import type { CodingPlanLoginOptions } from "./model-provider-section/codingPlanPricingCards.js";
 import { useModelProviderNavigation } from "./model-provider-section/useModelProviderNavigation.js";
 import { reportPresetSubscriptionSuccess } from "./model-provider-section/oauthActions.js";
 import {
   createCodingPlanProviderNodeKey,
+  createCatalogProviderNodeKey,
   createCustomProviderNodeKey,
   createPresetProviderNodeKey,
 } from "./model-provider-section/utils.js";
@@ -309,7 +313,6 @@ export function ModelProviderSection({
   // 登录/解绑后的 refreshCodingPlanProducts 契约调用（保持共享 helper 签名不变）。
   const [, setCodingPlanProductsRefreshToken] = useState(0);
   const [pendingCreatedProviderId, setPendingCreatedProviderId] = useState<string | null>(null);
-  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [creatingProvider, setCreatingProvider] = useState(false);
 
   useEffect(() => {
@@ -335,12 +338,10 @@ export function ModelProviderSection({
         // 仅显示错误，保留当前可操作页面和持久连接，后续合法导航/手动选择可恢复。
         logger.warn("[ModelProviderSection] 无法打开目标供应商", { providerId: target.providerId });
         setInvalidProviderTarget(true);
-        setTemplatePickerOpen(false);
         return true;
       }
 
       setInvalidProviderTarget(false);
-      setTemplatePickerOpen(false);
       setSelectedNodeKey(resolveProviderFamilySideNodeKey(providerId));
       return true;
     },
@@ -683,6 +684,8 @@ export function ModelProviderSection({
     useModelProviderNavigation({
       presetProviders,
       modelProviders,
+      providerTemplates,
+      locale,
       entitledAccountProviderIds,
       modelProvidersLoading: loading,
       displayOrder,
@@ -979,20 +982,30 @@ export function ModelProviderSection({
     (item: (typeof navigationItems)[number]) => {
       setInvalidProviderTarget(false);
       setSelectedNodeKey(resolveModelProviderSideSelectionKey(item));
-      setTemplatePickerOpen(false);
       void persistProviderFamilyModeForNavItem(item);
     },
     [persistProviderFamilyModeForNavItem],
   );
 
   const handleCreateProvider = useCallback(
-    async (input: { templateId?: string; providerName?: string }) => {
+    async (input: {
+      templateId?: string;
+      providerName?: string;
+      initialConfig?: ProviderConfigObject;
+      /** 预置节点常驻存在，直接保持选中；自定义节点需等列表刷新后再选中。 */
+      catalogNodeKey?: string;
+    }) => {
+      const { catalogNodeKey, ...createInput } = input;
       setCreatingProvider(true);
       try {
-        const created = await createPersonalProvider({ ...input, locale });
+        const created = await createPersonalProvider({ ...createInput, locale });
+        if (catalogNodeKey) {
+          // 新 provider 出现前预置节点仍存在（显示设置卡），不会触发导航兜底跳转。
+          setSelectedNodeKey(catalogNodeKey);
+          return;
+        }
         setPendingCreatedProviderId(created.providerId);
         setSelectedNodeKey(createCustomProviderNodeKey(created.providerId));
-        setTemplatePickerOpen(false);
       } catch (error) {
         setPendingCreatedProviderId(null);
         throw error;
@@ -1033,6 +1046,21 @@ export function ModelProviderSection({
     [testModelConnectivity],
   );
 
+  const templateLocale = locale === "zh-CN" ? "zh-CN" : "en-US";
+  // 已进入预置清单的模板常驻左侧，新建菜单只列其余模板（其他接口格式、智谱 API Key 等）。
+  const moreProviderTemplates = useMemo(() => {
+    const catalogTemplateIds = new Set(PRESET_PROVIDER_CATALOG.map((entry) => entry.templateId));
+    return providerTemplates.filter((template) => !catalogTemplateIds.has(template.templateId));
+  }, [providerTemplates]);
+  const selectedCatalogSetup = useMemo(() => {
+    if (selectedNavItem?.type !== "catalog" || selectedNavItem.provider) return null;
+    const entry = PRESET_PROVIDER_CATALOG.find((item) => item.id === selectedNavItem.entryId);
+    const template = providerTemplates.find(
+      (item) => item.templateId === selectedNavItem.templateId,
+    );
+    return entry && template ? { entry, template, label: selectedNavItem.label } : null;
+  }, [providerTemplates, selectedNavItem]);
+
   // 首屏慢网时之前直接 return null，导致整块模型供应商页空白，
   // 已有的左侧分组 loading 和刷新按钮 loading 都没有机会渲染。
   // 这里改为始终先渲染布局壳子，再按分组展示 loading，避免用户误以为页面坏了。
@@ -1066,15 +1094,42 @@ export function ModelProviderSection({
         });
         refreshCodingPlanEntitlements();
       }}
-      addProviderLabel={intl.formatMessage({ id: "settings.modelProvider.addProviderAction" })}
-      onAddProvider={() => setTemplatePickerOpen(true)}
+      createAction={
+        <CustomProviderCreateMenu
+          moreTemplates={moreProviderTemplates}
+          resolveTemplateLabel={(template) =>
+            resolveProviderTemplateName(template.templateId, template, templateLocale)
+          }
+          disabled={creatingProvider}
+          onCreateCompatible={(apiType) =>
+            void handleCreateProvider({
+              providerName: intl.formatMessage({
+                id:
+                  apiType === "anthropic-messages"
+                    ? "settings.modelProvider.compatible.anthropic"
+                    : apiType === "openai-responses"
+                      ? "settings.modelProvider.compatible.openaiResponses"
+                      : "settings.modelProvider.compatible.openai",
+              }),
+              initialConfig: { api: { type: apiType } },
+            }).catch((error: unknown) =>
+              logger.warn("[ModelProviderSection] 新建自定义供应商失败", { error }),
+            )
+          }
+          onCreateFromTemplate={(templateId) =>
+            void handleCreateProvider({ templateId }).catch((error: unknown) =>
+              logger.warn("[ModelProviderSection] 从模板新建供应商失败", { templateId, error }),
+            )
+          }
+        />
+      }
       navigationGroups={navigationGroups}
       selectedNodeKey={selectedNodeKey}
       onSelectNavItem={handleSelectNavItem}
       onReorderProviderIds={handleReorderProviderIds}
       reorderableProviderIds={reorderableProviderIds}
     >
-      {(invalidProviderTarget || navigationUnavailable) && !templatePickerOpen ? (
+      {invalidProviderTarget || navigationUnavailable ? (
         <p role="alert" className="mb-3 text-ui-base text-destructive">
           {intl.formatMessage({
             id: invalidProviderTarget
@@ -1083,17 +1138,26 @@ export function ModelProviderSection({
           })}
         </p>
       ) : null}
-      {templatePickerOpen ? (
-        <ProviderTemplatePicker
-          templates={providerTemplates}
+      {selectedCatalogSetup ? (
+        <PresetProviderSetupCard
+          key={selectedCatalogSetup.entry.id}
+          entry={selectedCatalogSetup.entry}
+          template={selectedCatalogSetup.template}
+          label={selectedCatalogSetup.label}
           creating={creatingProvider}
-          onBack={() => setTemplatePickerOpen(false)}
-          onCreateFromTemplate={(templateId) => {
-            return handleCreateProvider({ templateId });
-          }}
-          onCreateCustom={(label) => {
-            return handleCreateProvider({ providerName: label });
-          }}
+          onCreate={(access) =>
+            handleCreateProvider({
+              templateId: selectedCatalogSetup.entry.templateId,
+              initialConfig: { access },
+              catalogNodeKey: createCatalogProviderNodeKey(selectedCatalogSetup.entry.id),
+            }).catch((error: unknown) =>
+              logger.warn("[ModelProviderSection] 配置预置供应商失败", {
+                templateId: selectedCatalogSetup.entry.templateId,
+                error,
+              }),
+            )
+          }
+          onOpenApiKeyUrl={handleOpenApiKeyUrl}
         />
       ) : (
         <ModelProviderSectionDetail

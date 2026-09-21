@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON } from "@zcode/shared";
 import type { ModelProviderNavGroup } from "@/settings/model-provider-section/constants.js";
 import { ModelProviderSectionNavigation } from "@/settings/model-provider-section/Navigation.js";
 import { ProviderDetailFeedbackBoundary } from "@/settings/model-provider-section/ProviderDetailFeedback.js";
@@ -12,8 +11,8 @@ interface ModelProviderSectionLayoutProps {
   presetLoading: boolean;
   customLoading: boolean;
   onRefresh: () => void;
-  addProviderLabel: string;
-  onAddProvider: () => void;
+  /** 新建自定义供应商入口（下拉菜单）。 */
+  createAction: ReactNode;
   navigationGroups: ModelProviderNavGroup[];
   selectedNodeKey: string | null;
   onSelectNavItem: (item: ModelProviderNavGroup["items"][number]) => void;
@@ -36,8 +35,7 @@ export function ModelProviderSectionLayout({
   presetLoading,
   customLoading,
   onRefresh,
-  addProviderLabel,
-  onAddProvider,
+  createAction,
   navigationGroups,
   selectedNodeKey,
   onSelectNavItem,
@@ -54,14 +52,14 @@ export function ModelProviderSectionLayout({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <p className="text-ui-base leading-6 text-foreground-subtle">{description}</p>
-        <SettingsResourceHeaderActions
-          onRefresh={onRefresh}
-          onNew={onAddProvider}
-          refreshing={refreshButtonLoading}
-          refreshLabel={refreshButtonLoading ? loadingLabel : refreshLabel}
-          newLabel={addProviderLabel}
-          newTestId={TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON}
-        />
+        <div className="flex items-center gap-2">
+          <SettingsResourceHeaderActions
+            onRefresh={onRefresh}
+            refreshing={refreshButtonLoading}
+            refreshLabel={refreshButtonLoading ? loadingLabel : refreshLabel}
+          />
+          {createAction}
+        </div>
       </div>
 
       <div className="overflow-clip rounded-xl border border-border bg-card">

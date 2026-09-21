@@ -8,15 +8,12 @@ import {
 import {
   isBuiltinModelProviderId,
   resolveRuntimeZCodeEndpointOrigin,
-  ZCODE_VERSION,
 } from "@zcode/shared";
 import { dirname, join } from "node:path";
 import {
   NodeModelSelectionConfigRepository,
   NodeProviderRegistryRuntime,
   resolveNodeProviderRuntimePaths,
-  downloadZCodeBuiltinRelease,
-  resolveZCodeBuiltinClientPlatform,
   ZCODE_BUILTIN_PROVIDER_BUNDLED_CONFIG_FILE_ENV,
   type ZCodeBuiltinRefreshEvent,
 } from "@zcode/provider-node";
@@ -71,14 +68,8 @@ export async function startProcessProviderRegistryRuntime(
               "zcode-builtin-refresh.json",
             ),
             resolveEndpointKey: () => resolveRuntimeZCodeEndpointOrigin(env),
-            fetchRelease: (endpointOrigin, signal) =>
-              downloadZCodeBuiltinRelease({
-                endpointOrigin,
-                signal,
-                appVersion: ZCODE_VERSION,
-                platform: resolveZCodeBuiltinClientPlatform(),
-                request: options.standalone?.request ?? globalThis.fetch,
-              }),
+            // 与 Host 一致：预置清单只来自仓库打包配置，不再远端覆盖。
+            fetchRelease: async () => null,
             onRefreshResult: options.standalone?.onBuiltinRefreshResult,
           },
         }

@@ -370,7 +370,6 @@ import { bindAccountProviderInvalidation } from "./model-provider/accountProvide
 import { AccountProviderApiClient } from "./model-provider/accountProviderApiClient.js";
 import { AccountProviderApiKeyResolver } from "./model-provider/accountProviderApiKeyResolver.js";
 import { createProviderConfigRuntime } from "./model-provider/providerConfigRuntime.js";
-import { fetchZCodeBuiltinRemoteRelease } from "./model-provider/zcodeBuiltinRemoteConfig.js";
 import {
   createProviderRuntimeFromConfigRuntime,
   type ProviderRuntime,
@@ -1528,14 +1527,9 @@ export function createLocalServices(options: {
           providerConfigLog.info(undefined, "ZCode Built-in CDN 配置已更新", event);
         else providerConfigLog.debug(undefined, "ZCode Built-in 刷新检查", event);
       },
-      fetchRelease: (endpointOrigin, signal) =>
-        fetchZCodeBuiltinRemoteRelease({
-          apiClient,
-          endpointOrigin,
-          signal,
-          appVersion: ZCODE_VERSION,
-          platform: clientConfigPlatform,
-        }),
+      // 预置 Provider 清单以仓库内 config/provider/zcode-builtin.json 为唯一来源，
+      // 不再从远端 CDN 拉取覆盖；返回 null 时同步器只记录 missing，不改动本地配置。
+      fetchRelease: async () => null,
     },
     onZCodeBuiltinRefreshError: (error) => {
       providerConfigLog.warn(undefined, "ZCode Built-in Config 远端刷新失败", { error });

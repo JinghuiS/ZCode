@@ -117,7 +117,8 @@ function ModelProviderNavigationButton({
         <span className="flex min-w-0 flex-1 items-center gap-1.5 max-md:sr-only">
           <span className="min-w-0 truncate">{label}</span>
         </span>
-        {"provider" in item ? (
+        {/* 未配置的预置项没有执行事实，不显示状态点，避免与「已配置但不可用」混淆。 */}
+        {"provider" in item && !(item.type === "catalog" && !item.provider) ? (
           <ProviderStatusIndicator
             provider={item.type === "preset" ? item.statusProvider : item.provider}
           />
@@ -197,7 +198,8 @@ function SortableModelProviderNavigationButton({
         <span className="flex min-w-0 flex-1 items-center gap-1.5 max-md:sr-only">
           <span className="min-w-0 truncate">{label}</span>
         </span>
-        {"provider" in item ? (
+        {/* 未配置的预置项没有执行事实，不显示状态点，避免与「已配置但不可用」混淆。 */}
+        {"provider" in item && !(item.type === "catalog" && !item.provider) ? (
           <ProviderStatusIndicator
             provider={item.type === "preset" ? item.statusProvider : item.provider}
           />
@@ -377,21 +379,25 @@ export function ModelProviderSectionNavigation({
 
   return (
     <aside className="px-1.5 py-3 md:py-2 md:px-2">
-      <div className="flex min-h-0 flex-col gap-2 max-md:gap-1">
-        {/* 预置与自定义 provider 不再分「智谱 / 自定义」两个标题展示，统一为一个供应商列表；
-            内部仍保留两段，因为只有自定义段支持拖拽排序。 */}
-        <div className="flex h-7 items-center justify-between px-2 py-1 max-md:hidden">
-          <h3 className="text-ui-sm font-semibold text-foreground-subtlest">
-            {intl.formatMessage({ id: "settings.modelProvider.navTitle" })}
-          </h3>
-          {presetLoading || customLoading ? (
-            <Loader2Icon className="size-3 animate-spin text-foreground-subtlest" />
-          ) : null}
-        </div>
+      <div className="flex min-h-0 flex-col gap-3 max-md:gap-1">
+        {/* 预置清单常驻展示；自定义段只放用户新建的兼容接口 provider，并支持拖拽排序。 */}
         {navigationGroups
           .filter((group) => group.items.length > 0)
           .map((group) => (
             <div key={group.id} className="flex flex-col gap-2 max-md:gap-1">
+              <div className="flex h-7 items-center justify-between px-2 py-1 max-md:hidden">
+                <h3 className="text-ui-sm font-semibold text-foreground-subtlest">
+                  {intl.formatMessage({
+                    id:
+                      group.id === "preset"
+                        ? "settings.modelProvider.presetGroupTitle"
+                        : "settings.modelProvider.customGroupTitle",
+                  })}
+                </h3>
+                {(group.id === "preset" ? presetLoading : customLoading) ? (
+                  <Loader2Icon className="size-3 animate-spin text-foreground-subtlest" />
+                ) : null}
+              </div>
               {group.id === "preset" ? (
                 <PresetProviderCardNavigation
                   group={group}

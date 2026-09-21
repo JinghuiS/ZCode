@@ -218,6 +218,17 @@ export type ModelProviderNavItem =
       label: string;
       provider: ProviderSettingsFormProvider;
       statusActive: boolean;
+    }
+  | {
+      /** 仓库预置清单中的供应商；未配置时 provider 为 null，由设置卡片按需创建。 */
+      key: string;
+      type: "catalog";
+      entryId: string;
+      templateId: string;
+      label: string;
+      logo?: ProviderSettingsFormProvider["config"]["logo"];
+      provider: ProviderSettingsFormProvider | null;
+      statusActive: boolean;
     };
 
 export type ModelProviderNavGroupId = "preset" | "custom";

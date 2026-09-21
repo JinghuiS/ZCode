@@ -45,6 +45,44 @@ function AuthMethodOption({
   );
 }
 
+/** 认证方式单选：账号登录 / API Key。预置设置卡与已配置卡片共用。 */
+export function ProviderAuthMethodRadioGroup({
+  authProviderId,
+  method,
+  disabled,
+  onMethodChange,
+}: {
+  authProviderId: ProviderAuthProviderId;
+  method: ProviderAuthMethod;
+  disabled?: boolean;
+  onMethodChange: (method: ProviderAuthMethod) => void;
+}) {
+  const { intl } = useZCodeIntl();
+  return (
+    <div className="space-y-2">
+      <label className="block text-ui-base text-foreground-subtle">
+        {intl.formatMessage({ id: "settings.modelProvider.auth.method" })}
+      </label>
+      <div role="radiogroup" className="flex flex-col gap-0.5">
+        <AuthMethodOption
+          checked={method === "account"}
+          disabled={disabled}
+          label={intl.formatMessage({
+            id: `settings.modelProvider.auth.account.${authProviderId}`,
+          })}
+          onSelect={() => method !== "account" && onMethodChange("account")}
+        />
+        <AuthMethodOption
+          checked={method === "api-key"}
+          disabled={disabled}
+          label={intl.formatMessage({ id: "settings.modelProvider.auth.apiKey" })}
+          onSelect={() => method !== "api-key" && onMethodChange("api-key")}
+        />
+      </div>
+    </div>
+  );
+}
+
 /**
  * Provider 认证方式：账号登录（Provider 级 OAuth）或 API Key。
  * 凭据归属 provider-auth:<authProviderId>，与全局客户端账号无关。
@@ -65,29 +103,15 @@ export function ProviderAuthMethodSection({
   const { status, loginState, startLogin, cancelLogin, logout } = useProviderAuth(
     method === "account" ? authProviderId : undefined,
   );
-  const accountLabel = intl.formatMessage({
-    id: `settings.modelProvider.auth.account.${authProviderId}`,
-  });
 
   return (
     <div className="space-y-2">
-      <label className="block text-ui-base text-foreground-subtle">
-        {intl.formatMessage({ id: "settings.modelProvider.auth.method" })}
-      </label>
-      <div role="radiogroup" className="flex flex-col gap-0.5">
-        <AuthMethodOption
-          checked={method === "account"}
-          disabled={switching}
-          label={accountLabel}
-          onSelect={() => method !== "account" && onMethodChange("account")}
-        />
-        <AuthMethodOption
-          checked={method === "api-key"}
-          disabled={switching}
-          label={intl.formatMessage({ id: "settings.modelProvider.auth.apiKey" })}
-          onSelect={() => method !== "api-key" && onMethodChange("api-key")}
-        />
-      </div>
+      <ProviderAuthMethodRadioGroup
+        authProviderId={authProviderId}
+        method={method}
+        disabled={switching}
+        onMethodChange={onMethodChange}
+      />
 
       {method === "account" ? (
         <div className="rounded-lg border border-card-border bg-surface px-3 py-2.5 text-ui-base">

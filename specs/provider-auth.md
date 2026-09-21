@@ -88,3 +88,31 @@ CLI runner（access.type = provider-oauth）
 - xAI 卡片可在「账号 / API Key」间切换；账号方式完成设备码登录后能正常对话。
 - access token 过期后下一次请求自动刷新，多窗口并发请求只刷新一次。
 - 登出后请求返回可读错误，不崩溃。
+
+---
+
+# B 期：预置供应商清单与模型设置结构
+
+## 数据来源
+
+- 连接地址、接口格式、模型元数据：只来自仓库打包的 `config/provider/zcode-builtin.json`。
+  Host 与独立 CLI 的远端同步 `fetchRelease` 固定返回 `null`，不再从 CDN 覆盖。
+- 修改该文件时必须提升 `revision`：本地若缓存过更高 revision 的旧远端配置，会优先于打包文件生效。
+- 预置展示清单：`packages/ui/src/settings/model-provider-section/presetProviderCatalog.ts`，
+  只声明「哪些模板常驻展示、显示名、支持的认证方式」。
+
+## 模型设置结构
+
+```text
+预置供应商
+  Z.ai / BigModel（账号套餐，C 期改造）
+  Kimi · MiniMax · DeepSeek · 百炼（中国/国际） · Xiaomi MiMo · OpenAI · Anthropic · xAI · OpenRouter · OpenCode Zen · OpenCode Go
+自定义供应商
+  用户经「新建供应商」创建：OpenAI Compatible（Chat / Responses）、Anthropic Compatible、更多模板
+```
+
+- 预置项常驻，未配置时不写入个人配置、不显示状态点；填写 API Key 或选择账号方式时才按模板创建。
+- 每个预置模板认领展示顺序中第一个同模板的个人 provider，其余同模板 provider 归入自定义。
+- 预置节点 key 为 `catalog:<entryId>`，创建期间节点始终存在；外部按 providerId 定位（`custom:<id>`）
+  会被导航校正到认领它的预置节点，避免兜底跳转到第一个供应商。
+- 「更多模板」列出未进入预置清单的模板（其他接口格式的 OpenCode、智谱 API Key 模板），保证模板都可创建。

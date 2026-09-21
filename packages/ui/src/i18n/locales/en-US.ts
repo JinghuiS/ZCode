@@ -2387,10 +2387,6 @@ const enUS: Record<string, string> = {
   "settings.modelProviderDescription":
     "Manage custom model providers. Once configured, they can be selected during chat.",
   "settings.modelProvider.add": "Add provider",
-  "settings.modelProvider.createCustomProvider": "Create custom provider",
-  "settings.modelProvider.templateCreateFailed":
-    "Failed to create provider: invalid personal provider configuration",
-  "settings.modelProvider.templateCreateRetry": "Retry",
   "settings.modelProvider.edit": "Edit",
   "settings.modelProvider.editModel": "Edit model settings",
   "settings.modelProvider.editModelDescription": "Edit the context window for this model.",
@@ -2416,9 +2412,6 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.catalogProviderSelect": "Select provider",
   "settings.modelProvider.catalogProviderSearch": "Search providers",
   "settings.modelProvider.catalogProviderEmpty": "No providers found",
-  "settings.modelProvider.addProviderAction": "Add provider",
-  "settings.modelProvider.templatePickerTitle": "Add provider",
-  "settings.modelProvider.templatePickerBack": "Back to provider details",
   "settings.modelProvider.addProviderModelReminder":
     "Add at least one model before adding the provider.",
   "settings.modelProvider.baseUrl": "Base URL",
@@ -3076,7 +3069,6 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.modelMetadata.invalid.maxOutputTokens":
     "Max output tokens must be a positive integer",
   "settings.modelProvider.modelMetadata.invalid.inputModalities": "Text input type is required",
-  "settings.modelProvider.newProviderName": "New provider",
   "settings.modelProvider.modelsPlaceholder": "One model name per line",
   "settings.modelProvider.modelsCount": "{count} models",
   "settings.modelProvider.auth.method": "Authentication",
@@ -3094,7 +3086,16 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.auth.openBrowser": "Open authorization page",
   "settings.modelProvider.auth.deviceHint":
     "If the browser didn't open, visit {url} and enter the code above.",
-  "settings.modelProvider.navTitle": "Providers",
+  "settings.modelProvider.presetGroupTitle": "Preset providers",
+  "settings.modelProvider.customGroupTitle": "Custom providers",
+  "settings.modelProvider.preset.notConfigured": "Not configured",
+  "settings.modelProvider.preset.useAccount": "Use account",
+  "settings.modelProvider.preset.save": "Save",
+  "settings.modelProvider.addCustomProvider": "New provider",
+  "settings.modelProvider.compatible.openai": "OpenAI Compatible (Chat Completions)",
+  "settings.modelProvider.compatible.openaiResponses": "OpenAI Compatible (Responses)",
+  "settings.modelProvider.compatible.anthropic": "Anthropic Compatible",
+  "settings.modelProvider.moreTemplates": "More templates",
   "settings.usage.sectionTitle": "Usage stats",
   "settings.usage.sectionDescription": "Built from local app session history.",
   "settings.usage.tab.appUsage": "App usage",
