@@ -196,6 +196,12 @@ export const resolveBuildAliases = ({
     rootDirectory,
     "../../packages/shared/src/zcodeEndpoint.ts",
   ),
+  // 修复：provider / provider-node 引用 @zcode/shared/provider-auth 子路径，缺别名时会被
+  // "@zcode/shared" 前缀改写成 `src/index.ts/provider-auth` 导致桌面 Agent 构建失败。
+  "@zcode/shared/provider-auth": resolve(
+    rootDirectory,
+    "../../packages/shared/src/provider-auth.ts",
+  ),
   "@zcode/shared/node": resolve(rootDirectory, "../../packages/shared/src/node.ts"),
   "@zcode/shared": resolve(rootDirectory, "../../packages/shared/src/index.ts"),
   "@zcode/core": resolve(cliDirectory, "../core/dist/index.js"),
