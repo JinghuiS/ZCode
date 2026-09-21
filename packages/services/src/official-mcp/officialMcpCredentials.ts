@@ -18,12 +18,8 @@
 import {
   OFFICIAL_MCP_AUTH_HEADER_NAMES,
   getModelProviderFamilySpec,
-  zcodeProviderAccountAccessSchema,
   type OfficialMcpAuthFailureReason,
-  type ZCodeAccountAccess,
-  type ZCodeProviderAccountAccess,
 } from "@zcode/shared";
-import type { ModelSelectionView } from "@zcode/provider";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 
 const log = createServiceLogger("official-mcp");
@@ -92,13 +88,7 @@ function createCredentialResolvedLogKey(input: {
 let lastCredentialResolvedLogKey: string | undefined;
 
 interface OfficialMcpCredentialResolverDeps {
-  accountRequestAuthService: {
-    resolveAccessCurrent(access: ZCodeProviderAccountAccess): Promise<ZCodeAccountAccess | null>;
-  };
   credentialService: { load(key: string): Promise<string | null | undefined> };
-  modelSelectionService: {
-    getView(): Promise<ModelSelectionView>;
-  };
 }
 
 export type OfficialMcpPlanScope =
@@ -126,18 +116,6 @@ export type OfficialMcpCredentialOutcome =
   | { ok: true; snapshot: OfficialMcpCredentialSnapshot }
   | { ok: false; reason: OfficialMcpAuthFailureReason };
 
-type SelectedPlan = {
-  providerFamily: "zai" | "bigmodel";
-  providerId: string;
-  planScope: OfficialMcpPlanScope | null;
-  wireScope: OfficialMcpWireScope;
-};
-
-type SelectedProvider = {
-  providerId: string;
-  access: ZCodeProviderAccountAccess;
-};
-
 function fail(reason: OfficialMcpAuthFailureReason): {
   ok: false;
   reason: OfficialMcpAuthFailureReason;
@@ -145,78 +123,11 @@ function fail(reason: OfficialMcpAuthFailureReason): {
   return { ok: false, reason };
 }
 
-/**
- * 从 Registry 判定当前启用的 Coding Plan Provider；动态套餐和 Team scope 随后由账号服务解析。
- * 禁止从静态 Provider Config 读取或伪造当前 Team scope。
- */
-function resolveSelectedProvider(
-  registry: ModelSelectionView,
-): { ok: true; provider: SelectedProvider } | { ok: false; reason: OfficialMcpAuthFailureReason } {
-  const candidates = registry.providers.flatMap((provider) => {
-    const parsed = zcodeProviderAccountAccessSchema.safeParse(provider.config.access);
-    return parsed.success &&
-      (parsed.data.mode === "individual-coding-plan" || parsed.data.mode === "team-coding-plan")
-      ? [{ providerId: provider.providerId, access: parsed.data }]
-      : [];
-  });
-  if (candidates.length !== 1) {
-    return fail("official_auth_plan_required");
-  }
-  return { ok: true, provider: candidates[0]! };
-}
-
-function resolveSelectedPlan(
-  selectedProvider: SelectedProvider,
-  access: ZCodeAccountAccess | null,
-): { ok: true; plan: SelectedPlan } | { ok: false; reason: OfficialMcpAuthFailureReason } {
-  if (
-    !access ||
-    access.family !== selectedProvider.access.accountType ||
-    (selectedProvider.access.mode === "team-coding-plan"
-      ? access.planKind !== "team-coding-plan"
-      : access.planKind !== "individual-coding-plan")
-  ) {
-    return fail("official_auth_plan_required");
-  }
-  const { providerId } = selectedProvider;
-  const providerFamily = access.family;
-  if (access.planKind === "team-coding-plan") {
-    const teamScope: OfficialMcpPlanScope = {
-      organizationId: access.organizationId,
-      projectId: access.projectId,
-      targetType: "TEAM",
-    };
-    return {
-      ok: true,
-      plan: {
-        providerFamily,
-        providerId,
-        planScope: teamScope,
-        wireScope: providerFamily === "bigmodel" ? teamScope : null,
-      },
-    };
-  }
-  return {
-    ok: true,
-    plan: {
-      providerFamily,
-      providerId,
-      planScope: { targetType: "PERSONAL" },
-      wireScope: { targetType: "PERSONAL" },
-    },
-  };
-}
-
-/** 非秘密的选择指纹，用于解析前后比对，防止把切换前后的两代凭证拼进同一请求。 */
-function createSelectionFingerprint(registry: ModelSelectionView): string {
-  return JSON.stringify({ revision: registry.revision, providers: registry.providers });
-}
-
 type OfficialMcpIdentitySnapshot = {
   activeProvider: "zai" | "bigmodel";
   jwt: string;
-  registry: ModelSelectionView;
-  selectionFingerprint: string;
+  /** MaaS 登录 JWT；缺失表示登录态不完整。 */
+  maasJwt: string;
 };
 
 async function readIdentitySnapshot(
@@ -225,8 +136,7 @@ async function readIdentitySnapshot(
   | { ok: true; snapshot: OfficialMcpIdentitySnapshot }
   | { ok: false; reason: OfficialMcpAuthFailureReason }
 > {
-  const [registry, activeProviderValue, jwtValue] = await Promise.all([
-    deps.modelSelectionService.getView(),
+  const [activeProviderValue, jwtValue] = await Promise.all([
     deps.credentialService.load(ACTIVE_OAUTH_PROVIDER_KEY),
     deps.credentialService.load(ZCODE_JWT_TOKEN_KEY),
   ]);
@@ -235,15 +145,9 @@ async function readIdentitySnapshot(
   if ((activeProvider !== "zai" && activeProvider !== "bigmodel") || !jwt) {
     return fail("official_auth_unavailable");
   }
-  return {
-    ok: true,
-    snapshot: {
-      activeProvider,
-      jwt,
-      registry,
-      selectionFingerprint: createSelectionFingerprint(registry),
-    },
-  };
+  const maasJwt =
+    (await deps.credentialService.load(maasJwtCredentialKey(activeProvider)))?.trim() ?? "";
+  return { ok: true, snapshot: { activeProvider, jwt, maasJwt } };
 }
 
 function isSameIdentitySnapshot(
@@ -253,33 +157,20 @@ function isSameIdentitySnapshot(
   return (
     before.activeProvider === after.activeProvider &&
     before.jwt === after.jwt &&
-    before.selectionFingerprint === after.selectionFingerprint
+    before.maasJwt === after.maasJwt
   );
 }
 
-function identityOnlyOutcome(identity: OfficialMcpIdentitySnapshot): OfficialMcpCredentialOutcome {
-  log.debug("official mcp identity-only credentials resolved", {
-    providerFamily: identity.activeProvider,
-    reason: "official_auth_plan_required",
-  });
-  return {
-    ok: true,
-    snapshot: {
-      jwt: identity.jwt,
-      planScope: null,
-      providerFamily: identity.activeProvider,
-      wireScope: null,
-    },
-  };
-}
-
 /**
- * 解析当前选中连接的官方 MCP 凭证。
+ * 解析官方 MCP 凭证。
  *
- * 防竞态：Registry、动态 Account Access、active provider、zcode JWT 与 MaaS JWT
- * 都可能在解析期间变化。这里在前后各取一次并比对，任一不一致就整轮
- * 重来，绝不拼接两代凭证——既包括"zcode JWT 来自 ZAI 而 MaaS JWT 来自 BigModel"（跨 family 混搭），
- * 也包括"旧 JWT + 新 JWT"（同 family 的 token 轮换）。两轮仍不稳定则按不可用返回。
+ * 修复：智谱套餐已降级为普通 Provider，内置配置不再下发 `zhipu-account` 套餐连接，
+ * 旧逻辑要求 Registry 中恰有一个 Coding Plan 连接，导致官方 MCP 永远判定为 plan_required。
+ * 现在直接使用 Z.ai / BigModel 账号登录态（Provider 级账号登录复用同一套 OAuth 凭据），
+ * 以个人（PERSONAL）scope 调用；套餐是否可用由服务端按账号判定。
+ *
+ * 防竞态：active provider、zcode JWT 与 MaaS JWT 前后各取一次并比对，
+ * 任一不一致就整轮重来，绝不拼接两代凭证。两轮仍不稳定则按不可用返回。
  */
 export async function resolveOfficialMcpCredentials(
   deps: OfficialMcpCredentialResolverDeps,
@@ -290,99 +181,46 @@ export async function resolveOfficialMcpCredentials(
       if (attempt === 0) continue;
       return identity;
     }
-    const selectedProvider = resolveSelectedProvider(identity.snapshot.registry);
-    if (!selectedProvider.ok) {
-      const latestIdentity = await readIdentitySnapshot(deps);
-      if (
-        !latestIdentity.ok ||
-        !isSameIdentitySnapshot(identity.snapshot, latestIdentity.snapshot)
-      ) {
-        continue;
-      }
-      return identityOnlyOutcome(identity.snapshot);
-    }
-    const accountAccess = await deps.accountRequestAuthService.resolveAccessCurrent(
-      selectedProvider.provider.access,
-    );
-    const selected = resolveSelectedPlan(selectedProvider.provider, accountAccess);
-    if (!selected.ok) return selected;
-
-    // zcode JWT 是全局登录身份镜像；只校验 selectedKey 会把 ZAI JWT 与 BigModel key 拼到同一请求。
-    if (identity.snapshot.activeProvider !== selected.plan.providerFamily) {
-      return fail("official_auth_unavailable");
-    }
-
-    const maasJwtKey = maasJwtCredentialKey(selected.plan.providerFamily);
-    const codingPlanAuthorization = (await deps.credentialService.load(maasJwtKey))?.trim() ?? "";
-    if (!codingPlanAuthorization) {
-      // 归类为 unavailable 而不是 plan_required：这是登录态不完整（需要重新登录），
-      // 不是"没有套餐"。两个 provider adapter 在登录时都会硬性要求写入该 token，
-      // 因此正常路径不会命中，主要出现在历史迁移过来的旧登录态上。
+    const { activeProvider, jwt, maasJwt } = identity.snapshot;
+    if (!maasJwt) {
+      // 登录态不完整（需要重新登录），不是"没有套餐"。
       log.warn("official mcp maas jwt missing", {
-        providerFamily: selected.plan.providerFamily,
+        providerFamily: activeProvider,
         reason: "official_auth_unavailable",
       });
       return fail("official_auth_unavailable");
     }
 
-    const [latestIdentity, latestMaasJwt] = await Promise.all([
-      readIdentitySnapshot(deps),
-      deps.credentialService.load(maasJwtKey),
-    ]);
-    const latestSelectedProvider = latestIdentity.ok
-      ? resolveSelectedProvider(latestIdentity.snapshot.registry)
-      : latestIdentity;
-    const latestAccountAccess = latestSelectedProvider.ok
-      ? await deps.accountRequestAuthService.resolveAccessCurrent(
-          latestSelectedProvider.provider.access,
-        )
-      : null;
-    if (
-      !latestIdentity.ok ||
-      !isSameIdentitySnapshot(identity.snapshot, latestIdentity.snapshot) ||
-      !latestSelectedProvider.ok ||
-      JSON.stringify(accountAccess) !== JSON.stringify(latestAccountAccess) ||
-      codingPlanAuthorization !== (latestMaasJwt?.trim() ?? "")
-    ) {
+    const latestIdentity = await readIdentitySnapshot(deps);
+    if (!latestIdentity.ok || !isSameIdentitySnapshot(identity.snapshot, latestIdentity.snapshot)) {
       continue;
     }
 
-    // provider 条目只作"该 Coding Plan 连接确实存在"的门槛。业务 key 本身不再是凭证
-    // （已切到 MaaS JWT 通道），因此不再要求它有值——否则业务 key 正在刷新的瞬态
-    // 会把一次本可成功的调用判成"没有套餐"。真正的"没有套餐"由上面两道门槛拦住：
-    // API Key 模式与选中 Start Plan 连接，两者都不依赖业务 key。
-    const provider = identity.snapshot.registry.providers.find(
-      (candidate) => candidate.providerId === selected.plan.providerId,
-    );
-    if (!provider) return fail("official_auth_plan_required");
-
-    // info 而非 debug：生产构建 debug 不落盘，而 MaaS JWT 剩余有效期是排障关键线索
-    // （见 createCredentialResolvedLogKey 的说明）。只记剩余秒数，绝不记 token 本身。
-    // 去重键跨桶才记录，避免日志量与官方 MCP 请求数同数量级。
-    const maasJwtExpiresInSeconds = readJwtExpiresInSeconds(codingPlanAuthorization);
+    const planScope: OfficialMcpPlanScope = { targetType: "PERSONAL" };
+    // info 而非 debug：MaaS JWT 剩余有效期是排障关键线索；只记剩余秒数，绝不记 token 本身。
+    const maasJwtExpiresInSeconds = readJwtExpiresInSeconds(maasJwt);
     const logKey = createCredentialResolvedLogKey({
-      providerFamily: selected.plan.providerFamily,
-      planTargetType: selected.plan.planScope?.targetType ?? null,
+      providerFamily: activeProvider,
+      planTargetType: planScope.targetType,
       maasJwtExpiresInSeconds,
     });
     if (logKey !== lastCredentialResolvedLogKey) {
       lastCredentialResolvedLogKey = logKey;
       log.info("official mcp credentials resolved", {
         maasJwtExpiresInSeconds,
-        providerFamily: selected.plan.providerFamily,
-        planTargetType: selected.plan.planScope?.targetType ?? null,
-        wireTargetType: selected.plan.wireScope?.targetType ?? null,
+        providerFamily: activeProvider,
+        planTargetType: planScope.targetType,
       });
     }
 
     return {
       ok: true,
       snapshot: {
-        codingPlanAuthorization,
-        jwt: identity.snapshot.jwt,
-        planScope: selected.plan.planScope,
-        providerFamily: selected.plan.providerFamily,
-        wireScope: selected.plan.wireScope,
+        codingPlanAuthorization: maasJwt,
+        jwt,
+        planScope,
+        providerFamily: activeProvider,
+        wireScope: planScope,
       },
     };
   }

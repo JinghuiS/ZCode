@@ -1644,11 +1644,7 @@ export function createLocalServices(options: {
   // 而身份头里没有 family；身份头仍由同一个 buildOfficialMcpAuthHeaders 构造。
   const officialMcpCredentialSource = {
     resolve: () =>
-      resolveOfficialMcpCredentials({
-        accountRequestAuthService,
-        credentialService,
-        modelSelectionService: providerRuntime.modelSelection,
-      }),
+      resolveOfficialMcpCredentials({ credentialService }),
   };
   // mcpSync/hooks 里引用 zcodeAgentService 的闭包是惰性调用，声明顺序不影响初始化。
   const skillsService = createSkillsService({ isDesktopRuntime: true });
