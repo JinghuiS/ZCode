@@ -23,7 +23,6 @@ import {
   refreshRestoredOAuthProviderFamilyAfterStartup,
 } from "@/root/oauthProviderFamilySelectionRefresh.js";
 import { applyCachedOAuthSessionRestoreResult } from "@/root/oauthCachedSessionRestore.js";
-import { markZcodeJwtInvalidRestart } from "@/root/zcodeJwtInvalidRestartMarker.js";
 import { shouldApplyOAuthPollingFailure } from "@/root/oauthLoginAttemptGuard.js";
 import { useAccountConnectionLossNotification } from "@/root/useAccountConnectionLossNotification.js";
 
@@ -219,7 +218,6 @@ export function useRootOAuthEffects({
           onReauthenticationRequired();
           return;
         }
-        markZcodeJwtInvalidRestart();
         if (typeof window !== "undefined" && !("zcode" in window)) {
           // Web 没有 Electron RelaunchApp；marker 写入后立即刷新，避免停留在僵尸登录态。
           window.location.reload();

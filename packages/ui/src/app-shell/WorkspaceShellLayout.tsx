@@ -92,6 +92,7 @@ import {
   isWorkspaceFilePathInside,
 } from "@/workspace-file-tree/model.js";
 import type { WorkspaceShellLayoutProps } from "@/app-shell/types.js";
+import { useZCodeStore } from "@/store/StoreProvider.js";
 import { useTabStoreApi } from "@/store/TabStoreProvider.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import type { ComposerMentionPrefill } from "@/store/zcodeSessionStoreTypes.js";
@@ -203,9 +204,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   onSelectRemoteProject,
   onCancelRemoteProject,
   onReconnectRemoteWorkspace,
-  onLogout,
-  onLogin,
-  user,
   reconnectingRemoteWorkspaceKeys,
   remoteWorkspaceErrorByWorkspaceKey,
   reconnectingRemoteWorkspaceLogsByWorkspaceKey = EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY,
@@ -333,6 +331,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   setGitSelectedSourceId,
   taskFindDialogProps,
 }: WorkspaceShellLayoutProps) {
+  // 会话分享仍依赖供应商账号登录态；客户端登录移除后不再经 props 逐层透传，直接读 store。
+  const user = useZCodeStore((state) => state.user);
   const { intl } = useZCodeIntl();
   const isOfficeMode = useIsOfficeMode();
   const baseServices = useBaseWorkspaceServices();
@@ -1580,9 +1580,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     reconnectingRemoteWorkspaceLogsByWorkspaceKey={
                       reconnectingRemoteWorkspaceLogsByWorkspaceKey
                     }
-                    onLogout={onLogout}
-                    onLogin={onLogin}
-                    user={user}
                     isDesktop={isDesktop}
                     isMacDesktop={isMacDesktop}
                     isWindowsDesktop={isWindowsDesktop}

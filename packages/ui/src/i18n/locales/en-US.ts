@@ -500,8 +500,6 @@ const enUS: Record<string, string> = {
   "quickPick.command.myTickets": "My feedback",
   "quickPick.command.community": "Community",
   "quickPick.command.productDocs": "Product docs",
-  "quickPick.command.login": "Connect",
-  "quickPick.command.logout": "Disconnect",
   "commandCenter.placeholder": "Search actions, tasks, or files",
   "commandCenter.open": "Search",
   "commandCenter.noResults": "No related results",
@@ -595,16 +593,6 @@ const enUS: Record<string, string> = {
 
   // App header
   "app.currentTheme": "Current: {theme}",
-  "app.login": "Connect",
-  "app.logout": "Disconnect",
-  "logout.confirm.title": "Disconnect and restart ZCode?",
-  "logout.confirm.descriptionWithRunningSessions":
-    "{count} session(s) are currently running. Disconnecting will interrupt them and restart the app.",
-  "logout.confirm.descriptionDefault":
-    "The app will restart after disconnecting. You will need to connect your account again.",
-  "logout.confirm.ok": "Disconnect and restart",
-  "logout.confirm.cancel": "Cancel",
-  "sidebar.profile.notLoggedIn": "Connect",
   "app.selectFile": "Select a file to get started",
   "app.workspace": "Workspace",
   "browser.title": "Browser",
@@ -2430,8 +2418,6 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.catalogProviderEmpty": "No providers found",
   "settings.modelProvider.addProviderAction": "Add provider",
   "settings.modelProvider.templatePickerTitle": "Add provider",
-  "settings.modelProvider.templateGroup.zhipu": "Zhipu",
-  "settings.modelProvider.templateGroup.other": "Other",
   "settings.modelProvider.templatePickerBack": "Back to provider details",
   "settings.modelProvider.addProviderModelReminder":
     "Add at least one model before adding the provider.",
@@ -3093,7 +3079,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.newProviderName": "New provider",
   "settings.modelProvider.modelsPlaceholder": "One model name per line",
   "settings.modelProvider.modelsCount": "{count} models",
-  "settings.modelProvider.presetTitle": "Providers",
+  "settings.modelProvider.navTitle": "Providers",
   "settings.usage.sectionTitle": "Usage stats",
   "settings.usage.sectionDescription": "Built from local app session history.",
   "settings.usage.tab.appUsage": "App usage",
@@ -3192,8 +3178,6 @@ const enUS: Record<string, string> = {
   "settings.usage.entitlementStatusNotConfigured": "Not configured",
   "sidebar.usage.summaryTitle": "Last 30 days",
   "sidebar.usage.plan.title": "Usage remaining",
-  "sidebar.usage.plan.upgrade": "Upgrade",
-  "sidebar.usage.plan.renew": "Renew",
   "sidebar.usage.plan.codingPlanTitle": "Coding Plan",
   "sidebar.usage.plan.audienceIndividual": "Individual",
   "sidebar.usage.plan.audienceTeam": "Team",
@@ -3213,7 +3197,6 @@ const enUS: Record<string, string> = {
   "sidebar.usage.plan.total": "Total",
   "sidebar.usage.plan.resetAt": "Resets {time}",
   "sidebar.usage.plan.modelUsage": "Model usage",
-  "sidebar.usage.plan.openStats": "Usage stats",
   "sidebar.usage.plan.refresh": "Refresh quota",
   "sidebar.usage.plan.refreshing": "Updating quota",
   "sidebar.usage.plan.updateFailed": "Possible network issue",
@@ -3356,7 +3339,6 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.presetDescription":
     "Built-in Z.ai and BigModel providers with OAuth-assisted configuration.",
   "settings.modelProvider.presetEmpty": "Not synced yet. Complete OAuth login first.",
-  "settings.modelProvider.customTitle": "Custom providers",
   "settings.modelProvider.refresh": "Refresh",
   "settings.modelProvider.reorderProvider": "Drag to reorder provider",
   "settings.modelProvider.reorderModel": "Drag to reorder model",

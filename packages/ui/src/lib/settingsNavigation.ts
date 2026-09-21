@@ -179,14 +179,8 @@ export function setPendingSettingsSection(section: SettingsSectionId): void {
   setPendingSettingsSectionIntent(section);
 }
 
-export function setPendingSettingsUsageIntent(): void {
-  // 使用统计入口只负责打开 Usage 分区，不强行覆盖用户要看的具体统计 tab。
-  setPendingSettingsSectionIntent("usage");
-}
-
 export function setPendingSettingsUsageCodingPlanIntent(): void {
-  // 剩余额度详情入口需要直达 Coding Plan 使用统计；
-  // 头像菜单入口则只打开 Usage 分区，避免覆盖用户上次查看的统计 tab。
+  // 剩余额度详情入口需要直达 Coding Plan 使用统计。
   setPendingSettingsSectionIntent("usage", { usageTab: "codingPlan" });
 }
 

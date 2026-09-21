@@ -224,6 +224,5 @@ export type ModelProviderNavGroupId = "preset" | "custom";
 
 export interface ModelProviderNavGroup {
   id: ModelProviderNavGroupId;
-  title: string;
   items: ModelProviderNavItem[];
 }

@@ -181,7 +181,6 @@ export function useModelProviderNavigation({
     const groups: ModelProviderNavGroup[] = [
       {
         id: "preset",
-        title: intl.formatMessage({ id: "settings.modelProvider.presetTitle" }),
         items: [
           ...presetProviders.map(({ id, displayName, provider }) => {
             const statusProvider = resolvePresetFamilyStatusProvider({
@@ -212,7 +211,6 @@ export function useModelProviderNavigation({
       },
       {
         id: "custom",
-        title: intl.formatMessage({ id: "settings.modelProvider.customTitle" }),
         items: customProviders.map((provider) => ({
           key: createCustomProviderNodeKey(provider.providerId),
           type: "custom" as const,

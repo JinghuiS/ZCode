@@ -28,6 +28,7 @@ import {
 } from "@zcode/shared";
 import { useCallback, useMemo, type KeyboardEvent } from "react";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import type { ModelProviderNavGroup, ModelProviderNavItem } from "./constants.js";
 import { useOptimisticReorder } from "./useOptimisticReorder.js";
 import { renderModelProviderNavIcon } from "./utils.js";
@@ -58,17 +59,6 @@ function resolveReorderedProviderIdsForGroup(params: {
     return [...params.providerIds];
   }
   return arrayMove([...params.providerIds], activeIndex, overIndex);
-}
-
-function shouldShowModelProviderGroupLoadingIndicator(params: {
-  groupId: ModelProviderNavGroup["id"];
-  presetLoading: boolean;
-  customLoading: boolean;
-}): boolean {
-  if (params.groupId === "preset") {
-    return params.presetLoading;
-  }
-  return params.customLoading;
 }
 
 function resolveModelProviderSideNavLabel(item: ModelProviderNavItem): string {
@@ -383,24 +373,25 @@ export function ModelProviderSectionNavigation({
     }),
   );
 
+  const { intl } = useZCodeIntl();
+
   return (
     <aside className="px-1.5 py-3 md:py-2 md:px-2">
-      <div className="flex min-h-0 flex-col gap-3 max-md:gap-1">
+      <div className="flex min-h-0 flex-col gap-2 max-md:gap-1">
+        {/* 预置与自定义 provider 不再分「智谱 / 自定义」两个标题展示，统一为一个供应商列表；
+            内部仍保留两段，因为只有自定义段支持拖拽排序。 */}
+        <div className="flex h-7 items-center justify-between px-2 py-1 max-md:hidden">
+          <h3 className="text-ui-sm font-semibold text-foreground-subtlest">
+            {intl.formatMessage({ id: "settings.modelProvider.navTitle" })}
+          </h3>
+          {presetLoading || customLoading ? (
+            <Loader2Icon className="size-3 animate-spin text-foreground-subtlest" />
+          ) : null}
+        </div>
         {navigationGroups
-          .filter((group) => group.id !== "custom" || group.items.length > 0)
+          .filter((group) => group.items.length > 0)
           .map((group) => (
             <div key={group.id} className="flex flex-col gap-2 max-md:gap-1">
-              <div className="flex h-7 items-center justify-between px-2 py-1 max-md:hidden">
-                <h3 className="text-ui-sm font-semibold text-foreground-subtlest">{group.title}</h3>
-                {shouldShowModelProviderGroupLoadingIndicator({
-                  groupId: group.id,
-                  presetLoading,
-                  customLoading,
-                }) ? (
-                  <Loader2Icon className="size-3 animate-spin text-foreground-subtlest" />
-                ) : null}
-              </div>
-
               {group.id === "preset" ? (
                 <PresetProviderCardNavigation
                   group={group}

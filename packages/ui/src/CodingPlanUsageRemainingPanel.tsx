@@ -121,7 +121,7 @@ function getEntitlementSourceId(
   return entitlement.sourceId ?? entitlement.providerId;
 }
 
-export function hasActiveCodingPlanSnapshot(
+function hasActiveCodingPlanSnapshot(
   snapshot: UsageEntitlementSnapshot | null,
   providerId: string,
 ): boolean {

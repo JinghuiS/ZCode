@@ -470,7 +470,7 @@ function V4ComposerModelControlsImpl({
         writeSidebarUsageCodingPlanProviderPreference(sourceId);
       }
       // 剩余额度「更多」直达 Coding Plan 使用统计（按上面写入的来源偏好选中当前套餐），
-      // 不落到应用用量；通用 Usage 入口仍走 setPendingSettingsUsageIntent。
+      // 不落到应用用量。
       setPendingSettingsUsageCodingPlanIntent();
       openSettingsTab();
     },

@@ -1,8 +1,9 @@
 /* oxlint-disable eslint(max-lines) */
 /**
- * WelcomeScreen —— OAuth / API Key 登录入口
+ * WelcomeScreen —— 供应商账号 OAuth / API Key 连接页
  *
- * 通过 useOAuth hook 驱动 OAuth 流程。
+ * 通过 useOAuth hook 驱动 OAuth 流程。客户端登录已移除，本页只从模型设置的「连接」入口打开，
+ * 因此必须提供取消出口，不能把用户困在这里。
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Loader2Icon, LoaderIcon, TriangleAlertIcon } from "lucide-react";
@@ -28,17 +29,18 @@ import { useZCodeStore } from "./store/StoreProvider.js";
 
 interface WelcomeScreenProps {
   onComplete: (reason: LoginCompleteReason) => void | Promise<void>;
+  onClose: () => void;
 }
 
-export type LoginCompleteReason = "oauth" | "apiKey" | "skip";
+type LoginCompleteReason = "oauth" | "apiKey" | "skip";
 
-export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
+export function WelcomeScreen({ onComplete, onClose }: WelcomeScreenProps) {
   return (
     <main className="relative flex h-full min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-6 text-foreground sm:px-6">
       <ThemeHeroVisual className="absolute inset-0" />
       <div className="pointer-events-none absolute left-0 top-0 right-0 z-10 flex h-12 w-full items-center [app-region:drag]" />
       <section className="relative z-10 w-full flex flex-col gap-10 max-w-sm rounded-2xl border border-popover-border bg-background p-8 text-ui-base/relaxed shadow-md sm:p-10">
-        <LoginPanel active onComplete={onComplete} />
+        <LoginPanel active onComplete={onComplete} onClose={onClose} />
       </section>
     </main>
   );
@@ -47,6 +49,7 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
 interface LoginPanelProps {
   active: boolean;
   onComplete: (reason: LoginCompleteReason) => void | Promise<void>;
+  onClose: () => void;
 }
 
 interface ActiveLoginEntryAttempt {
@@ -68,7 +71,7 @@ function shouldCompleteLoginFromExistingUser(params: {
   return params.hasUser && !params.attempt;
 }
 
-function LoginPanel({ active, onComplete }: LoginPanelProps) {
+function LoginPanel({ active, onComplete, onClose }: LoginPanelProps) {
   const { intl } = useZCodeIntl();
   const {
     startLogin,
@@ -348,6 +351,14 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
                   }}
                 >
                   {intl.formatMessage({ id: "login.useApiKey" })}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="h-10 w-full text-ui-base"
+                  size="lg"
+                  onClick={onClose}
+                >
+                  {intl.formatMessage({ id: "common.cancel" })}
                 </Button>
               </div>
             ) : null}
