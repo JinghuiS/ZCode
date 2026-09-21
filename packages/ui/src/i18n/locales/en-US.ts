@@ -6242,7 +6242,7 @@ const enUS: Record<string, string> = {
   "settings.computerUse.title": "Computer Use",
   "settings.computerUse.kimi.title": "Kimi Computer Use",
   "settings.computerUse.kimi.description":
-    "A macOS background GUI automation app (KimiCU.app) by Moonshot AI. Install and grant permissions separately.",
+    "Desktop GUI automation by Moonshot AI (KimiCU.app on macOS, kimi-cu.exe on Windows). Install it separately.",
   "settings.computerUse.kimi.checking": "Checking…",
   "settings.computerUse.kimi.unsupported": "Not supported on this system",
   "settings.computerUse.kimi.notInstalled": "Not installed",
@@ -6251,19 +6251,19 @@ const enUS: Record<string, string> = {
   "settings.computerUse.kimi.refresh": "Refresh status",
   "settings.computerUse.kimi.install": "Install KimiCU",
   "settings.computerUse.kimi.installHint":
-    "Runs the official installer in Terminal and may ask for your administrator password. Come back and refresh when it finishes.",
-  "settings.computerUse.kimi.installFailed": "Could not open Terminal: {error}",
+    "Runs the official installer in a new terminal window (macOS may ask for your administrator password). Come back and refresh when it finishes.",
+  "settings.computerUse.kimi.installFailed": "Could not open the installer window: {error}",
   "settings.computerUse.kimi.grant": "Request permission",
   "settings.computerUse.kimi.grantHint":
     "Turn this on for KimiCU in System Settings → Privacy & Security, then come back and refresh.",
   "settings.computerUse.kimi.grantFailed": "Could not request permission: {error}",
+  "settings.computerUse.kimi.windowsNote":
+    "On Windows, actions briefly take over the keyboard and mouse. Avoid using the computer while they run.",
   "settings.computerUse.kimi.serviceUnavailable":
     "The KimiCU background service is not responding. Run kimi-cu install in Terminal, then refresh.",
-  "settings.computerUse.unsupported.windowsDescription":
-    "Computer Use on Windows is not available yet. Only macOS is supported for now.",
   "settings.computerUse.toggleLabel": "Enable Computer Use",
   "settings.computerUse.toggleDescription":
-    "Enables Computer Use tools and skill powered by Kimi Computer Use (macOS only).",
+    "Enables Computer Use tools and skill powered by Kimi Computer Use (macOS / Windows x64).",
   "settings.computerUse.composerEntry.label": "Show Computer Use button in the composer",
   "settings.computerUse.composerEntry.description": "When off, the composer button is hidden.",
   "settings.computerUse.composerEntry.requiresEnabled":

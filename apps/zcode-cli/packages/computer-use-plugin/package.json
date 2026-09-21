@@ -1,0 +1,9 @@
+{
+  "name": "@zcode/computer-use-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "作为官方 ZCode 内置插件发布的电脑控制（Kimi Computer Use）启动器与 skill；纯资源包，无需构建。",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/mcp/server.js"
+}

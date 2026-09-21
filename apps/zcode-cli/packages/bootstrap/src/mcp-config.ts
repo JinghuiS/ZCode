@@ -33,6 +33,12 @@ const NODE_REPL_SERVER_NAME = "node_repl";
 const REFRESH_MARKER_ENV = "ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER";
 
 /**
+ * 电脑控制插件（computer-use@zcode-plugins-official）现由 Kimi Computer Use 提供，
+ * 其 manifest 声明的 stdio server 名为 kimi-cu。它带有该插件的 plugin id，但不是旧 zcode-cua。
+ */
+const KIMI_COMPUTER_USE_MCP_SERVER_NAME = "kimi-cu";
+
+/**
  * Derive official CUA provenance from the in-memory plugin registry rather than
  * from serializable MCP fields. A user/project override replaces the config
  * object in `configuredServers`, so copied names, commands, and env values do
@@ -46,6 +52,8 @@ export function resolveTrustedOfficialCuaServerNames(
     Object.entries(pluginServers)
       .filter(
         ([name, config]) =>
+          // kimi-cu 是普通 MCP（Kimi Computer Use），不享有旧 zcode-cua 的 broker/图片 authority。
+          name !== KIMI_COMPUTER_USE_MCP_SERVER_NAME &&
           configuredServers[name] === config &&
           config.type === "stdio" &&
           config.env?.[ZCODE_PLUGIN_ID_ENV_KEY]?.trim().toLowerCase() ===
@@ -184,12 +192,6 @@ function isZCodeCuaStdioServer(
   if (isZCodeCuaMcpCommand(config.command)) return true;
   return (config.args ?? []).some(isZCodeCuaMcpPackageArg);
 }
-
-/**
- * 电脑控制插件（computer-use@zcode-plugins-official）现由 Kimi Computer Use 提供，
- * 其 `.mcp.json` 声明的 stdio server 名为 kimi-cu。
- */
-const KIMI_COMPUTER_USE_MCP_SERVER_NAME = "kimi-cu";
 
 function isRetiredCuaMcpServer(name: string, config: McpServerConfig | undefined): boolean {
   // node_repl is the single supported CUA host and may share the CUA plugin's

@@ -218,6 +218,7 @@ export { IProviderAuthService } from "./provider-auth/providerAuth.js";
 export { IKimiComputerUseService } from "./kimi-computer-use/kimiComputerUse.js";
 export type {
   KimiComputerUsePermissions,
+  KimiComputerUsePlatform,
   KimiComputerUseStatus,
 } from "./kimi-computer-use/kimiComputerUse.js";
 

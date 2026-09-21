@@ -44,12 +44,12 @@ export const officialSeaPlugins = [
     version: "0.5.1",
   },
   {
-    // 电脑控制：纯资源插件，MCP 入口为 scripts/kimi-cu-mcp.sh（KimiCU.app 由用户安装）。
+    // 电脑控制：纯资源插件，MCP 入口为手写的 dist/mcp/server.js（KimiCU 由用户安装）。
     marketplace: "zcode-plugins-official",
     name: "computer-use",
     packageName: "@zcode/computer-use-plugin",
-    requiresRuntime: false,
-    requiredRuntimePaths: [],
+    requiresRuntime: true,
+    requiredRuntimePaths: ["dist/mcp/server.js"],
     rootPath: join("packages", "computer-use-plugin"),
     version: "1.0.0",
   },

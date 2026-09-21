@@ -6,14 +6,20 @@ export interface KimiComputerUsePermissions {
   screenRecording: boolean;
 }
 
+export type KimiComputerUsePlatform = "macos" | "windows";
+
 export type KimiComputerUseStatus =
   | { supported: false }
-  | { supported: true; installed: false }
+  | { supported: true; platform: KimiComputerUsePlatform; installed: false }
   | {
       supported: true;
+      platform: KimiComputerUsePlatform;
       installed: true;
       version?: string;
-      /** 以 KimiCU 后台服务上报为准；服务未响应时为 null。 */
+      /**
+       * macOS：以 KimiCU 后台服务上报为准，服务未响应时为 null。
+       * Windows：没有系统级授权项，恒为 null。
+       */
       permissions: KimiComputerUsePermissions | null;
     };
 
@@ -25,9 +31,9 @@ export type KimiComputerUseStatus =
  */
 export interface IKimiComputerUseService {
   getStatus(): Promise<KimiComputerUseStatus>;
-  /** macOS：在系统「终端」中运行官方安装脚本。 */
+  /** 在用户可见的窗口中运行官方安装脚本（macOS：「终端」；Windows：PowerShell）。 */
   openInstaller(): Promise<void>;
-  /** 让 KimiCU 弹出辅助功能与屏幕录制的系统授权。 */
+  /** macOS：让 KimiCU 弹出辅助功能与屏幕录制的系统授权。 */
   requestPermissions(): Promise<void>;
 }
 

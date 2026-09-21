@@ -112,16 +112,16 @@ const officialPluginPackages = [
     stagedPath: "packages/node-repl-host",
   },
   {
-    // 电脑控制：纯资源插件（.mcp.json + 启动脚本 + skill），MCP 由用户安装的 KimiCU.app 提供，无需构建。
+    // 电脑控制：纯资源插件（手写 dist/mcp/server.js 启动器 + 安装脚本 + skill），MCP 由用户安装的 KimiCU 提供，无需构建。
     packageName: "@zcode/computer-use-plugin",
     relativePath: "apps/zcode-cli/packages/computer-use-plugin",
     requiresRuntime: false,
     requiredRuntimePaths: [],
     requiredSeedPaths: [
-      ".mcp.json",
+      "dist/mcp/server.js",
       "docs/computer-use.md",
+      "scripts/install-kimi-cu.ps1",
       "scripts/install-kimi-cu.sh",
-      "scripts/kimi-cu-mcp.sh",
       "skills/computer-use/SKILL.md",
     ],
     stagedPath: "packages/computer-use-plugin",

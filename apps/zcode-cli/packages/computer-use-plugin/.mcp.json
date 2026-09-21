@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "kimi-cu": {
-      "command": "/bin/sh",
-      "args": ["${ZCODE_PLUGIN_ROOT}/scripts/kimi-cu-mcp.sh"]
-    }
-  }
-}

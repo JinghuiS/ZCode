@@ -5978,7 +5978,7 @@ const zhCN: Record<string, string> = {
   "settings.computerUse.title": "电脑控制",
   "settings.computerUse.kimi.title": "Kimi Computer Use",
   "settings.computerUse.kimi.description":
-    "由 Moonshot AI 提供的 macOS 后台界面操作程序（KimiCU.app），需单独安装并授权。",
+    "由 Moonshot AI 提供的桌面界面操作程序（macOS 为 KimiCU.app，Windows 为 kimi-cu.exe），需单独安装。",
   "settings.computerUse.kimi.checking": "检测中…",
   "settings.computerUse.kimi.unsupported": "当前系统不支持",
   "settings.computerUse.kimi.notInstalled": "未安装",
@@ -5987,19 +5987,19 @@ const zhCN: Record<string, string> = {
   "settings.computerUse.kimi.refresh": "刷新状态",
   "settings.computerUse.kimi.install": "安装 KimiCU",
   "settings.computerUse.kimi.installHint":
-    "将在系统「终端」中运行官方安装脚本，可能需要输入管理员密码；安装完成后回到这里刷新。",
-  "settings.computerUse.kimi.installFailed": "无法打开终端：{error}",
+    "将在新的终端窗口中运行官方安装脚本（macOS 可能需要输入管理员密码）；安装完成后回到这里刷新。",
+  "settings.computerUse.kimi.installFailed": "无法打开安装窗口：{error}",
   "settings.computerUse.kimi.grant": "请求授权",
   "settings.computerUse.kimi.grantHint":
     "在「系统设置 → 隐私与安全性」中为 KimiCU 打开该权限，完成后回到这里刷新。",
   "settings.computerUse.kimi.grantFailed": "无法请求授权：{error}",
+  "settings.computerUse.kimi.windowsNote":
+    "Windows 版执行操作时会短暂占用键盘和鼠标，期间请勿操作电脑。",
   "settings.computerUse.kimi.serviceUnavailable":
     "KimiCU 后台服务未响应，可在终端运行 kimi-cu install 重新注册服务后刷新。",
-  "settings.computerUse.unsupported.windowsDescription":
-    "Windows 版电脑控制尚未接入，目前仅支持 macOS。",
   "settings.computerUse.toggleLabel": "启用电脑控制",
   "settings.computerUse.toggleDescription":
-    "开启后启用由 Kimi Computer Use 提供的电脑控制工具与技能（仅 macOS）。",
+    "开启后启用由 Kimi Computer Use 提供的电脑控制工具与技能（macOS / Windows x64）。",
   "settings.computerUse.composerEntry.label": "在输入框显示电脑操作按钮",
   "settings.computerUse.composerEntry.description": "关闭后输入框不再显示电脑操作按钮。",
   "settings.computerUse.composerEntry.requiresEnabled":

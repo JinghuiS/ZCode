@@ -72,11 +72,12 @@ export const OFFICIAL_BROWSER_USE_REQUIRED_SEED_PATHS = [
 ] as const;
 
 // 电脑控制由 Kimi Computer Use（kimi-cu mcp）提供：MCP 声明、启动脚本与技能缺一不可。
+// dist/mcp/server.js 为手写启动器，seed 时由 writeOfficialPluginRuntimeManifest 改写为 ZCode 自带 Node 启动。
 const OFFICIAL_CUA_REQUIRED_SEED_PATHS = [
-  ".mcp.json",
+  "dist/mcp/server.js",
   "docs/computer-use.md",
+  "scripts/install-kimi-cu.ps1",
   "scripts/install-kimi-cu.sh",
-  "scripts/kimi-cu-mcp.sh",
   "skills/computer-use/SKILL.md",
 ] as const;
 
@@ -356,7 +357,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../../../computer-use-plugin",
     ],
     requiredSeedPaths: OFFICIAL_CUA_REQUIRED_SEED_PATHS,
-    // 纯资源插件：MCP 入口是 shell 脚本，KimiCU.app 由用户经官方脚本安装。
+    // 纯资源插件：MCP 入口是手写的 dist/mcp/server.js（macOS / Windows 通用），KimiCU 由用户经官方脚本安装。
     runtimeTopLevelPaths: [],
     version: "1.0.0",
   },

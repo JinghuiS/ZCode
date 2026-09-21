@@ -1,0 +1,2 @@
+# dist/mcp/server.js 是手写的启动器源码（官方插件约定的 MCP 入口），需要纳入版本管理。
+!dist/

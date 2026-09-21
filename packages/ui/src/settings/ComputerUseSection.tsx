@@ -1,8 +1,8 @@
 // 设置页「电脑控制 (Computer Use)」分区：
 //  - 总开关：开/关官方电脑控制插件（连带其 kimi-cu MCP server 与 skill 一起启用/禁用）。
 //  - 输入框入口开关：控制输入框常驻「电脑操作」按钮的显隐。
-//  - 插件启用后展示 Kimi Computer Use 状态：安装与版本、辅助功能 / 屏幕录制授权，提供安装与授权入口。
-// 电脑控制由 Kimi Computer Use（KimiCU.app，macOS）提供，见 specs/computer-use-kimi.md。
+//  - 插件启用后展示 Kimi Computer Use 状态：安装与版本，macOS 另有辅助功能 / 屏幕录制授权，提供安装与授权入口。
+// 电脑控制由 Kimi Computer Use（macOS: KimiCU.app；Windows x64: kimi-cu.exe）提供，见 specs/computer-use-kimi.md。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import type { RemoteTarget } from "@zcode/shared";
@@ -69,8 +69,8 @@ export function ComputerUseSection({
     remoteTarget,
     workspaceIdentity,
   });
-  // KimiCU 作用于运行 Host 的本机：远端 workspace 与 Windows（尚未接入）不提供设置。
-  const supportsComputerUseSettings = isLocalWorkspace && !isWindowsDesktop;
+  // KimiCU 作用于运行 Host 的本机：远端 workspace 不提供设置；是否支持当前系统由 Host 探测。
+  const supportsComputerUseSettings = isLocalWorkspace;
 
   // 总开关 = 官方电脑控制插件启用态（切换即同步启用/禁用插件及其 MCP + skill）。
   const plugins = usePluginManagementStore((state) => state.plugins);
@@ -211,7 +211,7 @@ export function ComputerUseSection({
   }, [services.kimiComputerUseService, intl]);
 
   if (!supportsComputerUseSettings) {
-    // 远端 / Windows 环境若直接 return null，设置页只剩标题，会让用户误以为页面加载失败。
+    // 远端环境若直接 return null，设置页只剩标题，会让用户误以为页面加载失败。
     return (
       <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-ui-base text-warning">
         <p className="font-medium">
@@ -219,9 +219,8 @@ export function ComputerUseSection({
         </p>
         <p className="mt-1 text-ui-sm text-foreground-subtle">
           {intl.formatMessage({
-            id: isWindowsDesktop
-              ? "settings.computerUse.unsupported.windowsDescription"
-              : isComputerUseRemoteOrLinux(availability) && availability.kind === "local-linux"
+            id:
+              isComputerUseRemoteOrLinux(availability) && availability.kind === "local-linux"
                 ? "settings.computerUse.unsupported.linuxDescription"
                 : "settings.computerUse.unsupported.remoteDescription",
           })}
@@ -297,8 +296,13 @@ export function ComputerUseSection({
     );
 
   const kimiInstalled = Boolean(kimiStatus?.supported && kimiStatus.installed);
+  // 只有 macOS 需要系统级授权（辅助功能 / 屏幕录制）；Windows 版无授权项。
+  const isKimiMacOs = kimiStatus?.supported === true && kimiStatus.platform === "macos";
+  const isKimiWindows = kimiStatus?.supported === true && kimiStatus.platform === "windows";
   const serviceUnavailable =
-    kimiStatus?.supported === true && kimiStatus.installed && kimiStatus.permissions === null;
+    isKimiMacOs && kimiStatus?.supported === true && kimiStatus.installed
+      ? kimiStatus.permissions === null
+      : false;
   const accessibilityState = resolvePermissionState(kimiStatus, "accessibility");
   const screenRecordingState = resolvePermissionState(kimiStatus, "screenRecording");
 
@@ -376,10 +380,14 @@ export function ComputerUseSection({
                 <span className="text-ui-sm text-foreground-subtlest">
                   {intl.formatMessage({ id: "settings.computerUse.kimi.serviceUnavailable" })}
                 </span>
+              ) : isKimiWindows && kimiInstalled ? (
+                <span className="text-ui-sm text-foreground-subtlest">
+                  {intl.formatMessage({ id: "settings.computerUse.kimi.windowsNote" })}
+                </span>
               ) : undefined
             }
           />
-          {kimiInstalled ? (
+          {kimiInstalled && isKimiMacOs ? (
             <>
               <SettingsRow
                 controlLayout="wide"
