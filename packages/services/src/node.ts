@@ -310,6 +310,8 @@ import { createLocalConversationShareArtifactSource } from "./conversation-share
 import { ConversationShareHttpClient } from "./conversation-share/conversationShareHttpClient.js";
 import { IFileWatcherService } from "./fileWatcher/fileWatcher.js";
 import { IOAuthService } from "./oauth/oauth.js";
+import { IProviderAuthService } from "./provider-auth/providerAuth.js";
+import { createProviderAuthService } from "./provider-auth/providerAuthService.js";
 import { IUsageStatsService } from "./usage-stats/usageStats.js";
 import { ICodingPlanSubscriptionService } from "./coding-plan-subscription/codingPlanSubscription.js";
 import { IClientScenesService } from "./client-scenes/clientScenes.js";
@@ -1409,6 +1411,12 @@ export function createLocalServices(options: {
     credentialService,
   });
   const broadcastService = createBroadcastService(options?.parentPort ?? null);
+  // Provider 级认证（xAI 等）：UI 门面走 RPC，engine 只留在 Host 内部供请求期取 token。
+  const providerAuth = createProviderAuthService({
+    credentialService,
+    broadcastService,
+    appVersion: ZCODE_VERSION,
+  });
   const gitCheckpointService = createGitCheckpointService();
   const hostApiNetworkTransport =
     options?.hostApiNetworkTransport ??
@@ -2079,6 +2087,7 @@ export function createLocalServices(options: {
       ? { accountProviderConfigSource: agentAccountProviderConfigSource }
       : {}),
     accountRequestAuthService,
+    providerAuthTokenResolver: providerAuth.engine,
     ...(modelSelectionReadinessSource ? { modelSelectionReadinessSource } : {}),
     authorizeLocalMediaPreviewPath: options?.authorizeLocalMediaPreviewPath,
     ...offPeakToolWiring,
@@ -2438,6 +2447,7 @@ export function createLocalServices(options: {
     .register(IConversationShareService, conversationShareService)
     .register(IFileWatcherService, createFileWatcherService())
     .register(IOAuthService, oauthService)
+    .register(IProviderAuthService, providerAuth.service)
     .register(
       IUsageStatsService,
       createUsageStatsService({

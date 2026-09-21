@@ -103,6 +103,8 @@ export const ServiceChannels = {
   FileWatcher: "file-watcher",
   /** OAuth 认证服务 */
   OAuth: "oauth",
+  /** Provider 级认证（xAI Device OAuth 等），凭据归属具体 provider */
+  ProviderAuth: "provider-auth",
   /** 新 Provider Config 的设置读写 Facade */
   ProviderSettings: "provider-settings",
   /** 新 Provider Registry 的模型选择 Facade */

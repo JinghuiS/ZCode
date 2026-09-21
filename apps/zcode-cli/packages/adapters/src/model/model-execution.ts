@@ -352,7 +352,10 @@ function toAiSdkProviderConfig(
   config: RegistryProviderConfig,
 ): AiSdkProviderConfig {
   const common = {
-    ...(config.access.type !== "zhipu-account" && config.access.apiKey
+    // 账号型与 Provider OAuth 的鉴权都在请求期由 Host 下发，静态配置里没有 apiKey。
+    ...(config.access.type !== "zhipu-account" &&
+    config.access.type !== "provider-oauth" &&
+    config.access.apiKey
       ? { apiKey: config.access.apiKey }
       : {}),
     baseURL: config.api.baseUrl,

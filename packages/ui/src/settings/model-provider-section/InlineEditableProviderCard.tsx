@@ -18,6 +18,8 @@ import { Switch } from "@/components/ui/switch.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { isImeComposingKeyEvent } from "@/lib/imeComposition.js";
 import { resolvePendingProviderDraftSave, type ProviderDraftValues } from "./ProviderDraftSave.js";
+import { ProviderAuthMethodSection, type ProviderAuthMethod } from "./ProviderAuthMethodSection.js";
+import { resolveProviderOAuthSupport } from "./providerAuthSupport.js";
 import {
   ProviderApiKeySection,
   ProviderCardHeader,
@@ -192,6 +194,7 @@ export function InlineEditableProviderCard({
   const [apiKeyValue, setApiKeyValue] = useState(getProviderFormApiKey(provider));
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [savingEnabled, setSavingEnabled] = useState(false);
+  const [switchingAuthMethod, setSwitchingAuthMethod] = useState(false);
   const authoritativeModels = useMemo(
     () => resolveVisibleProviderModelsForEdit(provider),
     [provider],
@@ -444,6 +447,41 @@ export function InlineEditableProviderCard({
   cancelIdleDraftSaveRef.current = idleDraftSave.cancel;
   const scheduleIdleDraftSave = idleDraftSave.schedule;
   const cancelIdleDraftSave = idleDraftSave.cancel;
+
+  const authProviderId = resolveProviderOAuthSupport(provider);
+  const handleAuthMethodChange = async (method: ProviderAuthMethod) => {
+    if (!authProviderId || switchingAuthMethod) return;
+    cancelIdleDraftSave();
+    setSwitchingAuthMethod(true);
+    // 与启停开关同理：一次保存带上未提交的连接草稿，再只替换 access。
+    const draft =
+      resolvePendingProviderDraftSave({
+        provider,
+        draft: draftRef.current,
+        readOnlyEndpoints,
+        now: Date.now,
+      }) ?? provider;
+    // 账号方式只保存认证引用，token 归属 provider-auth:<id>；切回 API Key 需重新填写 Key。
+    const access =
+      method === "account"
+        ? ({ type: "provider-oauth", authProviderId } as const)
+        : ({ type: "api-key" } as const);
+    try {
+      await saveProviderWithCleanupGuard({
+        ...draft,
+        config: { ...draft.config, access },
+        personalConfig: { ...draft.personalConfig, access },
+      });
+      if (method === "api-key") {
+        draftRef.current.apiKeyValue = "";
+        setApiKeyValue("");
+      }
+    } catch {
+      // 统一保存入口已记录错误及可重试反馈。
+    } finally {
+      setSwitchingAuthMethod(false);
+    }
+  };
 
   const handleProviderEnabledChange = async (enabled: boolean) => {
     if (savingEnabled) return;
@@ -823,6 +861,15 @@ export function InlineEditableProviderCard({
             onBaseUrlCompositionEnd={handleTechnicalInputCompositionEnd}
           />
         )}
+
+        {authProviderId ? (
+          <ProviderAuthMethodSection
+            authProviderId={authProviderId}
+            method={provider.config.access?.type === "provider-oauth" ? "account" : "api-key"}
+            switching={switchingAuthMethod}
+            onMethodChange={(method) => void handleAuthMethodChange(method)}
+          />
+        ) : null}
 
         {isApiKeyProvider ? (
           <ProviderApiKeySection

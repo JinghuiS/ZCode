@@ -3,6 +3,7 @@ import {
   localTtftFactsSchema,
   sessionDebugSnapshotSchema,
   type LocalTtftFacts,
+  type ProviderAuthProviderId,
 } from "@zcode/shared";
 /* oxlint-disable eslint(max-lines) -- ZCode Protocol transport、通知 wiring 和 app-facing session 方法必须共享同一个 client/emitter 上下文。 */
 import { randomUUID } from "node:crypto";
@@ -860,6 +861,10 @@ interface CreateZCodeAgentServiceOptions extends Omit<
   mcpStatusIdleTimeoutMs?: number;
   accountProviderConfigSource?: ProviderSource<AccountProviderConfigSnapshot>;
   accountRequestAuthService?: IAccountRequestAuthService;
+  /** Provider 级 OAuth（xAI 等）的请求期 token 解析；token 只在 Host 内部流转。 */
+  providerAuthTokenResolver?: {
+    resolveAccessToken(authProviderId: ProviderAuthProviderId): Promise<string>;
+  };
   /** Desktop Host 请求 Main 登记 Agent 已授权的精确本地视频路径。 */
   authorizeLocalMediaPreviewPath?: (path: string) => Promise<string>;
   modelSelectionReadinessSource?: ModelSelectionReadinessSource;
@@ -1192,6 +1197,7 @@ export function createZCodeAgentService(
   const accountConfigReceivedRevisionByClient = new WeakMap<ZCodeProtocolClient, string>();
   const sessionTraceIdBySessionKey = new Map<string, TraceId>();
   const accountRequestAuthService = options?.accountRequestAuthService;
+  const providerAuthTokenResolver = options?.providerAuthTokenResolver;
   const accountProviderConfigSource = options?.accountProviderConfigSource;
   const modelSelectionReadinessSource = options?.modelSelectionReadinessSource;
   const sessionRuntimePreferencesAuthority = options?.sessionRuntimePreferencesAuthority ?? "local";
@@ -1252,6 +1258,14 @@ export function createZCodeAgentService(
   async function resolveAccountRequestAuth(
     request: ZCodeProviderRuntimeHeadersRequestParams,
   ): Promise<AccountRequestAuthMaterial | undefined> {
+    if (request.providerAuth && providerAuthTokenResolver) {
+      // Provider OAuth 的 access token 直接作为 Bearer；刷新与跨进程互斥由 ProviderAuthEngine 负责。
+      return {
+        apiKey: await providerAuthTokenResolver.resolveAccessToken(
+          request.providerAuth.authProviderId,
+        ),
+      };
+    }
     if (!request.accountAccess || !accountRequestAuthService) {
       return undefined;
     }
@@ -2263,7 +2277,11 @@ export function createZCodeAgentService(
             workspacePath: workspace.workspacePath,
           });
           const accountAccess = parsed.data.accountAccess;
-          if (accountRequestAuthService && accountAccess) {
+          const providerAuth = parsed.data.providerAuth;
+          if (
+            (accountRequestAuthService && accountAccess) ||
+            (providerAuthTokenResolver && providerAuth)
+          ) {
             // Account API Key / Team Runtime Key / Start Plan JWT 都不需要 Renderer 交互。
             // Host 按 Model 固定的 Account Access 自动应答，避免后台任务和无 pane 会话依赖 UI 订阅者。
             void respondAccountRequestAuthWithoutInteraction({

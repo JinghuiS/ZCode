@@ -177,6 +177,12 @@ export function createStandaloneProviderRuntimeHeadersPort(
     async refreshBeforeModelRequest(input) {
       input.abortSignal?.throwIfAborted();
       const providerId = input.providerId.trim();
+      if (input.providerAuth) {
+        // Provider OAuth 的刷新需要 Host 的凭据服务；独立 CLI 暂不承接，给出可操作的提示。
+        throw new Error(
+          `${providerId} 使用账号登录，独立 CLI 暂不支持；请改用 API Key，或在 ZCode 桌面端 / Web 中使用。`,
+        );
+      }
       const access = input.accountAccess;
       if (!access || access.mode !== "individual-coding-plan") {
         throw new Error(`Standalone Account Provider 请求身份无效: ${providerId}`);

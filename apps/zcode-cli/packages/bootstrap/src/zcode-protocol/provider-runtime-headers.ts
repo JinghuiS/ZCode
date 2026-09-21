@@ -41,6 +41,7 @@ export function createProviderRuntimeHeadersPort(
             modelSelection: { providerId: input.providerId, modelId: input.modelId },
             providerId: input.providerId,
             ...(input.accountAccess ? { accountAccess: input.accountAccess } : {}),
+            ...(input.providerAuth ? { providerAuth: input.providerAuth } : {}),
             reason: input.reason,
           },
           zcodeProviderRuntimeHeadersResponseSchema,

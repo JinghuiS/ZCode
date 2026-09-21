@@ -5,7 +5,7 @@ import type {
   ModelTextRequest,
   TraceContext,
 } from "@zcode/contracts";
-import type { ZCodeProviderAccountAccess } from "@zcode/shared";
+import type { ProviderAuthRef, ZCodeProviderAccountAccess } from "@zcode/shared";
 import type { AiSdkResolvedModel } from "./model-execution.js";
 
 export type AiSdkGenerateTextOptions = Parameters<typeof aiGenerateText>[0];
@@ -29,6 +29,7 @@ export interface AiSdkModelTextRequest extends ModelTextRequest {
   // 必须在每个 attempt 发送前给 core/host 一个刷新机会。
   refreshRuntimeHeadersBeforeAttempt?: (input: {
     accountAccess?: ZCodeProviderAccountAccess;
+    providerAuth?: ProviderAuthRef;
     attempt: number;
     reason?: "model-request";
     abortSignal?: AbortSignal;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sparseShape } from "@zcode/shared/config-schema";
+import { providerAuthProviderIdSchema } from "@zcode/shared/provider-auth";
 
 export const providerApiTypeDataSchema = z.enum([
   "anthropic-messages",
@@ -52,13 +53,28 @@ export const zhipuAccountAccessDataSchema = z
     type: completeZhipuAccountAccessDataSchema.shape.type,
   })
   .strict();
+/** Provider 级 OAuth：配置只保存认证引用，token 由 Host 的 ProviderAuthService 持有。 */
+export const completeProviderOAuthAccessDataSchema = z
+  .object({
+    type: z.literal("provider-oauth"),
+    authProviderId: providerAuthProviderIdSchema,
+  })
+  .strict();
+export const providerOAuthAccessDataSchema = z
+  .object({
+    ...sparseShape(completeProviderOAuthAccessDataSchema.shape),
+    type: completeProviderOAuthAccessDataSchema.shape.type,
+  })
+  .strict();
 export const providerAccessDataSchema = z.discriminatedUnion("type", [
   apiKeyAccessDataSchema,
   zhipuAccountAccessDataSchema,
+  providerOAuthAccessDataSchema,
 ]);
 const completeProviderAccessDataSchema = z.discriminatedUnion("type", [
   completeApiKeyAccessDataSchema,
   completeZhipuAccountAccessDataSchema,
+  completeProviderOAuthAccessDataSchema,
 ]);
 
 export const completeProviderApiDataSchema = z

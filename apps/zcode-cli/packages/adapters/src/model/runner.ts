@@ -7,6 +7,7 @@ import {
   ModelProtocolError,
   getCurrentModelInvocationContext,
 } from "@zcode/contracts";
+import type { ProviderAuthRef } from "@zcode/shared";
 import type {
   Logger,
   Model,
@@ -152,6 +153,11 @@ export class AiSdkModelAdapter {
         : {}),
     };
     const optionSpecs = options.modelConfig.optionSpecs;
+    // Provider 级 OAuth（如 xAI）与账号型 Provider 一样按请求向 Host 取鉴权，CLI 不持有 token。
+    const providerAuth: ProviderAuthRef | undefined =
+      options.providerConfig.access.type === "provider-oauth"
+        ? { type: "provider-oauth", authProviderId: options.providerConfig.access.authProviderId }
+        : undefined;
     const toLegacyRequest = (request: ModelExecutionRequest): AiSdkModelTextRequest => {
       const context = getCurrentModelInvocationContext();
       const {
@@ -178,7 +184,7 @@ export class AiSdkModelAdapter {
             }
             return { headersApplied: true, requestAuth };
           }
-        : options.providerConfig.access.type === "zhipu-account"
+        : options.providerConfig.access.type === "zhipu-account" || providerAuth
           ? (contextRefreshRuntimeHeadersBeforeAttempt ??
             (async () => {
               throw new ModelProtocolError(
@@ -215,6 +221,7 @@ export class AiSdkModelAdapter {
                   ...(options.providerConfig.access.type === "zhipu-account"
                     ? { accountAccess: options.providerConfig.access }
                     : {}),
+                  ...(providerAuth ? { providerAuth } : {}),
                 }),
             }
           : {}),

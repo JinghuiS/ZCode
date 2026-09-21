@@ -4,6 +4,7 @@ import type { z } from "zod";
 import {
   completeApiKeyAccessDataSchema,
   completeZhipuAccountAccessDataSchema,
+  completeProviderOAuthAccessDataSchema,
   completeProviderApiDataSchema,
   completeProviderConfigDataSchema,
   type providerApiTypeDataSchema,
@@ -13,6 +14,7 @@ import {
   type providerLogoDataSchema,
   type apiKeyAccessDataSchema,
   type zhipuAccountAccessDataSchema,
+  type providerOAuthAccessDataSchema,
   type providerAccessDataSchema,
   type providerApiDataSchema,
   type providerConfigDataSchema,
@@ -111,7 +113,45 @@ export class ZhipuAccountAccessConfig extends ConfigOverlay<ZhipuAccountAccessCo
   }
 }
 
-export type ProviderAccessConfig = ApiKeyAccessConfig | ZhipuAccountAccessConfig;
+export type ProviderOAuthAccessConfigInput = Omit<ProviderOAuthAccessConfigObject, "type">;
+
+export type ProviderOAuthAccessConfigObject = Readonly<
+  z.infer<typeof providerOAuthAccessDataSchema>
+>;
+
+/** Provider 级 OAuth 引用；凭据归属 `provider-auth:<authProviderId>`，不进入配置。 */
+export class ProviderOAuthAccessConfig extends ConfigOverlay<ProviderOAuthAccessConfig> {
+  readonly type = "provider-oauth" as const;
+  readonly authProviderId?: ProviderOAuthAccessConfigInput["authProviderId"];
+
+  constructor(input: ProviderOAuthAccessConfigInput = {}) {
+    super();
+    this.authProviderId = input.authProviderId;
+    Object.freeze(this);
+  }
+
+  overlay(next: ProviderOAuthAccessConfig): ProviderOAuthAccessConfig {
+    return new ProviderOAuthAccessConfig({
+      authProviderId: this.overlayValue(this.authProviderId, next.authProviderId),
+    });
+  }
+
+  validateComplete(path: readonly string[] = []): readonly ConfigValidationIssue[] {
+    return validateConfigSchema(completeProviderOAuthAccessDataSchema, this.toJSON(), path);
+  }
+
+  toJSON(): ProviderOAuthAccessConfigObject {
+    return {
+      type: this.type,
+      ...objectWithoutUndefined({ authProviderId: this.authProviderId }),
+    };
+  }
+}
+
+export type ProviderAccessConfig =
+  | ApiKeyAccessConfig
+  | ZhipuAccountAccessConfig
+  | ProviderOAuthAccessConfig;
 
 export type ProviderAccessConfigObject = Readonly<z.infer<typeof providerAccessDataSchema>>;
 
@@ -505,6 +545,8 @@ function overlayProviderAccess(
       return current.overlay(next as ApiKeyAccessConfig);
     case "zhipu-account":
       return current.overlay(next as ZhipuAccountAccessConfig);
+    case "provider-oauth":
+      return current.overlay(next as ProviderOAuthAccessConfig);
   }
 }
 

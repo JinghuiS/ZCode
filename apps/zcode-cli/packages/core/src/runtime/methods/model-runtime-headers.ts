@@ -1,6 +1,6 @@
 import { traceContextToLogContext } from "../deps.js";
 import type { ModelRequestAuth } from "@zcode/contracts";
-import type { ZCodeProviderAccountAccess } from "@zcode/shared";
+import type { ProviderAuthRef, ZCodeProviderAccountAccess } from "@zcode/shared";
 import type { Model, TraceContext } from "../deps.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 
@@ -14,6 +14,7 @@ export function createRefreshRuntimeHeadersBeforeModelAttempt(
 ):
   | ((attemptInput: {
       accountAccess?: ZCodeProviderAccountAccess;
+      providerAuth?: ProviderAuthRef;
       attempt: number;
       reason?: "model-request";
       abortSignal?: AbortSignal;
@@ -43,6 +44,7 @@ export function createRefreshRuntimeHeadersBeforeModelAttempt(
     // （helpers/child-client-ports.ts），把 sessionId 改写成客户端认识的根会话。
     const refreshResult = await runtimeHeadersPort.refreshBeforeModelRequest({
       accountAccess: attemptInput.accountAccess,
+      providerAuth: attemptInput.providerAuth,
       abortSignal: attemptInput.abortSignal ?? input.abortSignal,
       modelId: String(input.model.modelId),
       providerId: String(input.model.providerId),

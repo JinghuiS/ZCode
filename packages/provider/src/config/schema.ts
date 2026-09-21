@@ -10,6 +10,8 @@ import {
   ProviderTemplate,
   ProviderTemplateMap,
   ZhipuAccountAccessConfig,
+  ProviderOAuthAccessConfig,
+  type ProviderAccessConfig,
 } from "./provider-config.js";
 import {
   builtinModelConfigRulesSchema,
@@ -145,14 +147,22 @@ function createTemplateRules(
 function createProviderConfig(config: z.infer<typeof providerConfigDataSchema>): ProviderConfig {
   return new ProviderConfig({
     ...config,
-    access:
-      config.access == null
-        ? config.access
-        : config.access.type !== "zhipu-account"
-          ? new ApiKeyAccessConfig(config.access)
-          : new ZhipuAccountAccessConfig(config.access),
+    access: config.access == null ? config.access : createProviderAccessConfig(config.access),
     api: config.api == null ? config.api : new ProviderApiConfig(config.api),
   });
+}
+
+function createProviderAccessConfig(
+  access: NonNullable<z.infer<typeof providerConfigDataSchema>["access"]>,
+): ProviderAccessConfig {
+  switch (access.type) {
+    case "zhipu-account":
+      return new ZhipuAccountAccessConfig(access);
+    case "provider-oauth":
+      return new ProviderOAuthAccessConfig(access);
+    default:
+      return new ApiKeyAccessConfig(access);
+  }
 }
 
 function createModelConfig(config: z.infer<typeof modelConfigDataSchema>): ModelConfig {
