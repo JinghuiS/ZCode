@@ -20,12 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Loader2Icon } from "lucide-react";
 import { ProviderStatusIndicator } from "./ProviderStatusIndicator.js";
 
-import {
-  resolveModelProviderFamilySpecByProviderId,
-  isStartPlanModelProviderId,
-  TID_MODEL_PROVIDER_NAV_ITEM,
-  testId,
-} from "@zcode/shared";
+import { TID_MODEL_PROVIDER_NAV_ITEM, testId } from "@zcode/shared";
 import { useCallback, useMemo, type KeyboardEvent } from "react";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -40,7 +35,7 @@ function getSortableProviderId(
   item: ModelProviderNavItem,
   reorderableProviderIds?: ReadonlySet<string>,
 ): string | null {
-  if ((item.type === "custom" || item.type === "preset") && item.provider) {
+  if (item.provider) {
     return !reorderableProviderIds || reorderableProviderIds.has(item.provider.providerId)
       ? item.provider.providerId
       : null;
@@ -62,12 +57,6 @@ function resolveReorderedProviderIdsForGroup(params: {
 }
 
 function resolveModelProviderSideNavLabel(item: ModelProviderNavItem): string {
-  if (item.type === "preset") {
-    return resolveModelProviderFamilySpecByProviderId(item.presetId)?.label ?? item.label;
-  }
-  if (item.type === "codingPlan" && isStartPlanModelProviderId(item.presetId)) {
-    return "Start Plan";
-  }
   return item.label;
 }
 
@@ -85,33 +74,24 @@ function ModelProviderNavigationButton({
   showIcon?: boolean;
 }) {
   const isSelected = item.key === selectedNodeKey;
-  const isLoadingItem = item.type === "codingPlanLoading";
   const inactiveItemClassName = "border-transparent text-foreground hover:border-border-hover/60";
 
   return (
     <ControlHintTooltip title={label} side="right">
       <button
         type="button"
-        disabled={isLoadingItem}
         aria-label={label}
         aria-selected={isSelected}
         data-state={isSelected ? "selected" : "idle"}
         data-testid={testId(TID_MODEL_PROVIDER_NAV_ITEM, item.key)}
-        onClick={() => {
-          if (isLoadingItem) {
-            return;
-          }
-          onSelectNavItem(item);
-        }}
+        onClick={() => onSelectNavItem(item)}
         className={`relative box-border flex h-8 w-full items-center gap-2 rounded-lg border px-2 py-1 text-left text-ui-base font-medium transition-colors max-md:size-8 max-md:justify-center max-md:gap-0 max-md:px-0 ${
           isSelected
             ? "border-border-hover bg-card-selected text-foreground"
             : inactiveItemClassName
-        } disabled:cursor-not-allowed disabled:opacity-60`}
+        }`}
       >
-        {isLoadingItem ? (
-          <Loader2Icon className="size-4 shrink-0 animate-spin text-foreground-subtlest" />
-        ) : showIcon ? (
+        {showIcon ? (
           <span className="shrink-0 text-current">{renderModelProviderNavIcon(item)}</span>
         ) : null}
         <span className="flex min-w-0 flex-1 items-center gap-1.5 max-md:sr-only">
@@ -119,9 +99,7 @@ function ModelProviderNavigationButton({
         </span>
         {/* 未配置的预置项没有执行事实，不显示状态点，避免与「已配置但不可用」混淆。 */}
         {"provider" in item && !(item.type === "catalog" && !item.provider) ? (
-          <ProviderStatusIndicator
-            provider={item.type === "preset" ? item.statusProvider : item.provider}
-          />
+          <ProviderStatusIndicator provider={item.provider} />
         ) : null}
       </button>
     </ControlHintTooltip>
@@ -200,9 +178,7 @@ function SortableModelProviderNavigationButton({
         </span>
         {/* 未配置的预置项没有执行事实，不显示状态点，避免与「已配置但不可用」混淆。 */}
         {"provider" in item && !(item.type === "catalog" && !item.provider) ? (
-          <ProviderStatusIndicator
-            provider={item.type === "preset" ? item.statusProvider : item.provider}
-          />
+          <ProviderStatusIndicator provider={item.provider} />
         ) : null}
       </div>
     </ControlHintTooltip>

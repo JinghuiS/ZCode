@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   providerAuthCredentialKey,
   type ProviderAuthAccount,
-  type ProviderAuthDeviceLoginStart,
+  type ProviderAuthLoginStart,
   type ProviderAuthLoginResult,
   type ProviderAuthProviderId,
   type ProviderAuthStatus,
@@ -26,6 +26,8 @@ export interface ProviderAuthTokenSet {
   idToken?: string;
   /** Unix 毫秒；服务端未返回 expires_in 时按 1 小时估算，并以 JWT exp 兜底。 */
   expiresAt: number;
+  /** adapter 已知的账号信息；缺省时从 id_token / access token 的 JWT claims 解析。 */
+  account?: ProviderAuthAccount;
 }
 
 export class ProviderAuthInvalidGrantError extends Error {
@@ -35,23 +37,23 @@ export class ProviderAuthInvalidGrantError extends Error {
   }
 }
 
-export interface DeviceCodeLoginHandle {
-  userCode: string;
+export interface ProviderAuthLoginHandle {
+  kind: "device-code" | "browser";
+  userCode?: string;
   verificationUri: string;
   verificationUriComplete?: string;
   expiresAt: number;
   poll(signal: AbortSignal): Promise<ProviderAuthTokenSet>;
 }
 
-export interface DeviceCodeProviderAuthAdapter {
-  readonly kind: "device-code";
+export interface ProviderAuthAdapter {
   readonly authProviderId: ProviderAuthProviderId;
-  startDeviceLogin(): Promise<DeviceCodeLoginHandle>;
-  /** refresh_token 被拒绝时必须抛 ProviderAuthInvalidGrantError。 */
-  refresh(refreshToken: string): Promise<ProviderAuthTokenSet>;
+  startLogin(): Promise<ProviderAuthLoginHandle>;
+  /** 可轮换 token 的 provider 实现；refresh_token 被拒绝时必须抛 ProviderAuthInvalidGrantError。 */
+  refresh?(refreshToken: string): Promise<ProviderAuthTokenSet>;
+  /** 登出时清理 adapter 自有的外部会话（如智谱 OAuth 登录态）。 */
+  onLogout?(): Promise<void>;
 }
-
-export type ProviderAuthAdapter = DeviceCodeProviderAuthAdapter;
 
 /**
  * 凭据存储端口。withLock 必须是跨进程互斥：桌面端每个窗口有独立 Host 进程，
@@ -71,7 +73,13 @@ const storedCredentialSchema = z
     refresh: z.string().min(1).optional(),
     idToken: z.string().optional(),
     expiresAt: z.number(),
-    account: z.object({ email: z.string().optional(), subject: z.string().optional() }).optional(),
+    account: z
+      .object({
+        email: z.string().optional(),
+        name: z.string().optional(),
+        subject: z.string().optional(),
+      })
+      .optional(),
     /** refresh 被 invalid_grant 拒绝后置位；保留账号信息供 UI 提示重新登录。 */
     invalid: z.boolean().optional(),
   })
@@ -134,6 +142,11 @@ export class ProviderAuthEngine {
     this.now = options.now ?? (() => Date.now());
   }
 
+  /** 依赖装配顺序较晚的 adapter（如依赖 OAuth 服务的智谱账号）在创建后注册。 */
+  registerAdapter(adapter: ProviderAuthAdapter): void {
+    this.adapters.set(adapter.authProviderId, adapter);
+  }
+
   private requireAdapter(authProviderId: ProviderAuthProviderId): ProviderAuthAdapter {
     const adapter = this.adapters.get(authProviderId);
     if (!adapter) throw new Error(`Unsupported provider auth: ${authProviderId}`);
@@ -167,7 +180,7 @@ export class ProviderAuthEngine {
     tokens: ProviderAuthTokenSet,
     previous?: StoredCredential | null,
   ): StoredCredential {
-    const account = resolveAccount(tokens) ?? previous?.account;
+    const account = tokens.account ?? resolveAccount(tokens) ?? previous?.account;
     return {
       version: 1,
       access: tokens.access,
@@ -194,15 +207,13 @@ export class ProviderAuthEngine {
     };
   }
 
-  async startDeviceLogin(
-    authProviderId: ProviderAuthProviderId,
-  ): Promise<ProviderAuthDeviceLoginStart> {
+  async startLogin(authProviderId: ProviderAuthProviderId): Promise<ProviderAuthLoginStart> {
     const adapter = this.requireAdapter(authProviderId);
     // 同一 provider 只保留一个进行中的登录，重复发起时取消旧会话。
     for (const [loginId, session] of this.loginSessions) {
       if (session.authProviderId === authProviderId) this.cancelLogin(loginId);
     }
-    const handle = await adapter.startDeviceLogin();
+    const handle = await adapter.startLogin();
     const loginId = randomUUID();
     const controller = new AbortController();
     const result = handle
@@ -230,7 +241,8 @@ export class ProviderAuthEngine {
     return {
       loginId,
       authProviderId,
-      userCode: handle.userCode,
+      kind: handle.kind,
+      ...(handle.userCode ? { userCode: handle.userCode } : {}),
       verificationUri: handle.verificationUri,
       ...(handle.verificationUriComplete
         ? { verificationUriComplete: handle.verificationUriComplete }
@@ -250,7 +262,8 @@ export class ProviderAuthEngine {
   }
 
   async logout(authProviderId: ProviderAuthProviderId): Promise<void> {
-    this.requireAdapter(authProviderId);
+    const adapter = this.requireAdapter(authProviderId);
+    await adapter.onLogout?.();
     await this.options.store.withLock(() =>
       this.options.store.delete(providerAuthCredentialKey(authProviderId)),
     );
@@ -285,7 +298,7 @@ export class ProviderAuthEngine {
         if (latest.invalid)
           throw new Error(`${authProviderId} sign-in expired, please sign in again`);
         if (!this.shouldRefresh(latest)) return latest.access;
-        if (!latest.refresh) {
+        if (!latest.refresh || !adapter.refresh) {
           throw new Error(`${authProviderId} session has no refresh token, please sign in again`);
         }
         try {

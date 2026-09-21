@@ -103,6 +103,7 @@ export function ProviderAuthMethodSection({
   const { status, loginState, startLogin, cancelLogin, logout } = useProviderAuth(
     method === "account" ? authProviderId : undefined,
   );
+  const connectedAccountLabel = status?.account?.email ?? status?.account?.name;
 
   return (
     <div className="space-y-2">
@@ -121,20 +122,25 @@ export function ProviderAuthMethodSection({
                 <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
                 {intl.formatMessage({ id: "settings.modelProvider.auth.waiting" })}
               </div>
-              <div className="flex items-center gap-2">
-                <code className="rounded-md bg-hover px-2 py-1 font-mono text-ui-lg tracking-widest text-foreground">
-                  {loginState.login.userCode}
-                </code>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={intl.formatMessage({ id: "settings.modelProvider.auth.copyCode" })}
-                  onClick={() => void navigator.clipboard?.writeText(loginState.login.userCode)}
-                >
-                  <CopyIcon className="size-3.5" aria-hidden="true" />
-                </Button>
-              </div>
+              {/* 浏览器授权（智谱）没有验证码，只需在打开的页面完成授权。 */}
+              {loginState.login.userCode ? (
+                <div className="flex items-center gap-2">
+                  <code className="rounded-md bg-hover px-2 py-1 font-mono text-ui-lg tracking-widest text-foreground">
+                    {loginState.login.userCode}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={intl.formatMessage({ id: "settings.modelProvider.auth.copyCode" })}
+                    onClick={() =>
+                      void navigator.clipboard?.writeText(loginState.login.userCode ?? "")
+                    }
+                  >
+                    <CopyIcon className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </div>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
@@ -153,22 +159,24 @@ export function ProviderAuthMethodSection({
                   {intl.formatMessage({ id: "common.cancel" })}
                 </Button>
               </div>
-              <p className="text-ui-sm text-foreground-subtlest">
-                {intl.formatMessage(
-                  { id: "settings.modelProvider.auth.deviceHint" },
-                  { url: loginState.login.verificationUri },
-                )}
-              </p>
+              {loginState.login.userCode ? (
+                <p className="text-ui-sm text-foreground-subtlest">
+                  {intl.formatMessage(
+                    { id: "settings.modelProvider.auth.deviceHint" },
+                    { url: loginState.login.verificationUri },
+                  )}
+                </p>
+              ) : null}
             </div>
           ) : status?.status === "connected" ? (
             <div className="flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-2 text-foreground">
                 <CheckCircle2Icon className="size-4 shrink-0 text-success" aria-hidden="true" />
                 <span className="truncate">
-                  {status.account?.email
+                  {connectedAccountLabel
                     ? intl.formatMessage(
                         { id: "settings.modelProvider.auth.connectedAs" },
-                        { account: status.account.email },
+                        { account: connectedAccountLabel },
                       )
                     : intl.formatMessage({ id: "settings.modelProvider.auth.connected" })}
                 </span>

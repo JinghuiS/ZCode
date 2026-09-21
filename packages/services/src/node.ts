@@ -312,6 +312,7 @@ import { IFileWatcherService } from "./fileWatcher/fileWatcher.js";
 import { IOAuthService } from "./oauth/oauth.js";
 import { IProviderAuthService } from "./provider-auth/providerAuth.js";
 import { createProviderAuthService } from "./provider-auth/providerAuthService.js";
+import { createZhipuProviderAuthAdapter } from "./provider-auth/zhipuProviderAuthAdapter.js";
 import { IUsageStatsService } from "./usage-stats/usageStats.js";
 import { ICodingPlanSubscriptionService } from "./coding-plan-subscription/codingPlanSubscription.js";
 import { IClientScenesService } from "./client-scenes/clientScenes.js";
@@ -2335,6 +2336,23 @@ export function createLocalServices(options: {
     apiClient,
     onProviderLogout: handleOAuthProviderLogout,
   });
+  // 智谱 Z.ai / BigModel 账号登录作为 Provider 级认证：登录后自动解析账号 API Key。
+  for (const family of ["zai", "bigmodel"] as const) {
+    providerAuth.engine.registerAdapter(
+      createZhipuProviderAuthAdapter({
+        family,
+        oauthService,
+        loadAccessToken: async (provider) =>
+          (await oauthCredentialRepo.loadTokenSet(provider))?.accessToken ?? null,
+        loadAccountName: async (provider) => {
+          const profile = await oauthCredentialRepo.loadUserProfile(provider);
+          return profile?.displayName?.trim() || profile?.username?.trim() || undefined;
+        },
+        resolveApiKey: (provider, accessToken) =>
+          accountProviderApiKeyResolver.resolveProviderApiKey(provider, accessToken),
+      }),
+    );
+  }
   const zcodeJwtLogoutLogger = createServiceLogger("zcode-jwt-logout");
   zcodeJwtLogoutHandlerRef.current = (input, headers) => {
     // 条件退出本身已串行去重；不能丢弃等待旧候选期间到来的新凭据 401。

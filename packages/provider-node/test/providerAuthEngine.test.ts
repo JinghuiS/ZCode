@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   ProviderAuthEngine,
   ProviderAuthInvalidGrantError,
-  type DeviceCodeProviderAuthAdapter,
+  type ProviderAuthAdapter,
   type ProviderAuthCredentialStore,
   type ProviderAuthTokenSet,
 } from "../src/provider-auth/provider-auth-engine.js";
@@ -38,11 +38,10 @@ function seedCredential(
 
 function createAdapter(
   refresh: (refreshToken: string) => Promise<ProviderAuthTokenSet>,
-): DeviceCodeProviderAuthAdapter {
+): ProviderAuthAdapter {
   return {
-    kind: "device-code",
     authProviderId: "xai",
-    startDeviceLogin: async () => {
+    startLogin: async () => {
       throw new Error("not used");
     },
     refresh,

@@ -7,7 +7,7 @@ import { z } from "zod";
  * provider 配置里只保存 `{ type: "provider-oauth", authProviderId }` 引用，不含任何密钥。
  */
 
-export const providerAuthProviderIdSchema = z.enum(["xai"]);
+export const providerAuthProviderIdSchema = z.enum(["xai", "zai", "bigmodel"]);
 export type ProviderAuthProviderId = z.infer<typeof providerAuthProviderIdSchema>;
 
 /** 模型请求期随 runtime headers 请求携带的认证引用。 */
@@ -22,6 +22,8 @@ export type ProviderAuthRef = z.infer<typeof providerAuthRefSchema>;
 export const providerAuthAccountSchema = z
   .object({
     email: z.string().optional(),
+    /** 展示名（如智谱账号用户名）；没有 email 时 UI 用它展示当前账号。 */
+    name: z.string().optional(),
     subject: z.string().optional(),
   })
   .strict();
@@ -40,11 +42,16 @@ export interface ProviderAuthStatus {
   account?: ProviderAuthAccount;
 }
 
-/** Device Code 登录开始后 UI 需要展示的材料。 */
-export interface ProviderAuthDeviceLoginStart {
+/**
+ * 登录开始后 UI 需要展示的材料。
+ * device-code（xAI）：展示 userCode，用户在任意浏览器输入；
+ * browser（智谱）：只需打开授权页，授权完成由 Host 轮询确认。
+ */
+export interface ProviderAuthLoginStart {
   loginId: string;
   authProviderId: ProviderAuthProviderId;
-  userCode: string;
+  kind: "device-code" | "browser";
+  userCode?: string;
   verificationUri: string;
   verificationUriComplete?: string;
   /** Unix 毫秒。 */

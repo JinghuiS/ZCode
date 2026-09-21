@@ -1,7 +1,7 @@
 import {
   ProviderAuthInvalidGrantError,
   resolveProviderAuthTokenExpiresAt,
-  type DeviceCodeProviderAuthAdapter,
+  type ProviderAuthAdapter,
   type ProviderAuthTokenSet,
 } from "./provider-auth-engine.js";
 import {
@@ -23,14 +23,14 @@ function toTokenSet(tokens: XaiTokenResponse, now: number): ProviderAuthTokenSet
   };
 }
 
-export function createXaiProviderAuthAdapter(deps: XaiOAuthDeps): DeviceCodeProviderAuthAdapter {
+export function createXaiProviderAuthAdapter(deps: XaiOAuthDeps): ProviderAuthAdapter {
   const now = deps.now ?? (() => Date.now());
   return {
-    kind: "device-code",
     authProviderId: "xai",
-    async startDeviceLogin() {
+    async startLogin() {
       const device = await requestXaiDeviceCode(deps);
       return {
+        kind: "device-code",
         userCode: device.user_code,
         verificationUri: device.verification_uri,
         ...(device.verification_uri_complete

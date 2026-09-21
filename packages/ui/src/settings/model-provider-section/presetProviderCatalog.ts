@@ -4,8 +4,9 @@ import type { ProviderAuthProviderId } from "@zcode/shared";
  * 仓库内维护的预置供应商清单（展示顺序与认证方式）。
  *
  * 连接地址、接口格式、默认模型等配置仍来自打包的 `config/provider/zcode-builtin.json`
- * 模板，本清单只声明「哪些模板作为预置供应商常驻展示」。Z.ai / BigModel 的账号套餐
- * 由 family 入口承载，不在此清单中。
+ * 模板，本清单只声明「哪些模板作为预置供应商常驻展示」。
+ * Z.ai / BigModel 使用 Coding Plan 模板：账号登录会自动获取账号 API Key；
+ * 按量计费的标准 API 模板接口地址与模型不同，放在「更多模板」中。
  */
 export interface PresetProviderCatalogEntry {
   id: string;
@@ -17,6 +18,8 @@ export interface PresetProviderCatalogEntry {
 }
 
 export const PRESET_PROVIDER_CATALOG: readonly PresetProviderCatalogEntry[] = [
+  { id: "zai", templateId: "zai-api", name: "Z.ai", authProviderId: "zai" },
+  { id: "bigmodel", templateId: "bigmodel-api", name: "BigModel", authProviderId: "bigmodel" },
   { id: "kimi", templateId: "moonshot-kimi" },
   { id: "minimax", templateId: "minimax" },
   { id: "deepseek", templateId: "deepseek" },

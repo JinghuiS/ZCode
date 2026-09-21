@@ -1,6 +1,6 @@
 import {
   ServiceChannels,
-  type ProviderAuthDeviceLoginStart,
+  type ProviderAuthLoginStart,
   type ProviderAuthLoginResult,
   type ProviderAuthProviderId,
   type ProviderAuthStatus,
@@ -15,7 +15,7 @@ import { createServiceDescriptor } from "../descriptors.js";
  */
 export interface IProviderAuthService {
   getStatus(authProviderId: ProviderAuthProviderId): Promise<ProviderAuthStatus>;
-  startDeviceLogin(authProviderId: ProviderAuthProviderId): Promise<ProviderAuthDeviceLoginStart>;
+  startLogin(authProviderId: ProviderAuthProviderId): Promise<ProviderAuthLoginStart>;
   /** 长等待：用户完成授权、取消或失败后返回。 */
   awaitLogin(loginId: string): Promise<ProviderAuthLoginResult>;
   cancelLogin(loginId: string): Promise<void>;

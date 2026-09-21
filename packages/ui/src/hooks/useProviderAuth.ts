@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PROVIDER_AUTH_CHANGED_BROADCAST_CHANNEL,
-  type ProviderAuthDeviceLoginStart,
+  type ProviderAuthLoginStart,
   type ProviderAuthProviderId,
   type ProviderAuthStatus,
 } from "@zcode/shared";
@@ -12,7 +12,7 @@ import { useServices } from "./useServices.js";
 export type ProviderAuthLoginState =
   | { phase: "idle" }
   | { phase: "starting" }
-  | { phase: "waiting"; login: ProviderAuthDeviceLoginStart }
+  | { phase: "waiting"; login: ProviderAuthLoginStart }
   | { phase: "failed"; errorMessage: string };
 
 /**
@@ -65,9 +65,9 @@ export function useProviderAuth(authProviderId: ProviderAuthProviderId | undefin
   const startLogin = useCallback(async (): Promise<boolean> => {
     if (!authProviderId) return false;
     setLoginState({ phase: "starting" });
-    let login: ProviderAuthDeviceLoginStart;
+    let login: ProviderAuthLoginStart;
     try {
-      login = await providerAuthService.startDeviceLogin(authProviderId);
+      login = await providerAuthService.startLogin(authProviderId);
     } catch (error) {
       setLoginState({
         phase: "failed",

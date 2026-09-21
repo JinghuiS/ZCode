@@ -289,7 +289,7 @@ export function PluginStoreListView({
   );
 }
 
-export function SegmentPill({
+function SegmentPill({
   active,
   label,
   onClick,

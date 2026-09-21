@@ -57,14 +57,14 @@ export function createProviderAuthService(options: {
 
   const service: IProviderAuthService = {
     getStatus: (authProviderId) => engine.getStatus(authProviderId),
-    async startDeviceLogin(authProviderId) {
-      const start = await engine.startDeviceLogin(authProviderId);
-      logger.info("provider device login started", { authProviderId, loginId: start.loginId });
+    async startLogin(authProviderId) {
+      const start = await engine.startLogin(authProviderId);
+      logger.info("provider login started", { authProviderId, loginId: start.loginId });
       return start;
     },
     async awaitLogin(loginId) {
       const result = await engine.awaitLogin(loginId);
-      logger.info("provider device login finished", { loginId, status: result.status });
+      logger.info("provider login finished", { loginId, status: result.status });
       return result;
     },
     async cancelLogin(loginId) {

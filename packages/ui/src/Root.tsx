@@ -19,8 +19,6 @@ import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { SSHDialog } from "@/SSHDialog.js";
 import { SettingsPage } from "@/SettingsPage.js";
-import { CodingPlanUpgradeDialogProvider } from "@/settings/CodingPlanUpgradeDialogProvider.js";
-import { WelcomeScreen } from "@/WelcomeScreen.js";
 import { setDefaultFileDisplayBasePath } from "@/lib/fileDisplay.js";
 import { readRendererLaunchTimings, shouldReportLaunchToInput } from "@/lib/launchToInputReport.js";
 import { reportUiLaunchToInput } from "@/lib/uiPerfArmsTelemetry.js";
@@ -70,7 +68,6 @@ import { setSessionOpenArmsReporter } from "@/lib/sessionOpenArmsTelemetry.js";
 import { setSendFunnelArmsReporter } from "@/lib/sendFunnelArmsTelemetry.js";
 import { RootStartupLoading } from "@/root/RootStartupLoading.js";
 import { resolveProviderAvailabilityState } from "@/lib/modelProviderAvailability.js";
-import { ensureProviderFamilyDomainMigration } from "@/lib/providerFamilyDomainMigration.js";
 import { useSettings } from "@/hooks/useSettingService.js";
 import { CLOSE_ACTIVE_CONTEXT_REQUEST_EVENT } from "@/lib/closeActiveContext.js";
 import { AssistantCodeCommentFeatureProvider } from "@/AssistantCodeCommentFeatureProvider.js";
@@ -84,10 +81,6 @@ interface RemoteConnectionOpenPreference {
   preferredKind?: RemoteTarget["kind"];
   preferredWslDistro?: string;
 }
-
-// 客户端登录已移除：WelcomeScreen 只作为模型设置里「连接供应商账号」的 OAuth 页面，
-// 不再在启动缺少 provider、会话过期或登出后强制弹出。
-type WelcomeScreenOpenReason = "provider-request";
 
 /**
  * Root —— 应用根组件
@@ -119,9 +112,7 @@ export function Root(props: RootProps) {
                   <AssistantCodeCommentFeatureProvider
                     enabled={props.assistantCodeCommentCardsEnabled}
                   >
-                    <CodingPlanUpgradeDialogProvider>
-                      <RootInner {...props} />
-                    </CodingPlanUpgradeDialogProvider>
+                    <RootInner {...props} />
                   </AssistantCodeCommentFeatureProvider>
                 </DiffsWorkerPoolProvider>
               </TabStoreProvider>
@@ -181,20 +172,10 @@ function RootInner({
 
   const { intl, locale } = useZCodeIntl();
   const theme = useZCodeStore((state) => state.theme);
-  const user = useZCodeStore((state) => state.user);
   const isRestoringOAuthSession = useZCodeStore((state) => state.isRestoringOAuthSession);
   const setUser = useZCodeStore((state) => state.setUser);
   const setIsRestoringOAuthSession = useZCodeStore((state) => state.setIsRestoringOAuthSession);
-  const setOAuthError = useZCodeStore((state) => state.setOAuthError);
-  const oauthPollingActive = useZCodeStore((state) => state.oauthPollingActive);
-  const setOAuthPollingActive = useZCodeStore((state) => state.setOAuthPollingActive);
-  const markOAuthSuccess = useZCodeStore((state) => state.markOAuthSuccess);
   const { settings: appSettings, refresh: refreshAppSettings } = useSettings();
-  const [welcomeScreenOpenReason, setWelcomeScreenOpenReason] =
-    useState<WelcomeScreenOpenReason | null>(null);
-  const [providerFamilyDomainMigrationComplete, setProviderFamilyDomainMigrationComplete] =
-    useState(false);
-  const loginEntryRequest = useZCodeStore((state) => state.loginEntryRequest);
   const rootModelSelectionRead = useModelSelectionServiceView(services.modelSelectionService);
   const rootModelSelectionView =
     rootModelSelectionRead.state.status === "ready" ? rootModelSelectionRead.state.view : null;
@@ -351,35 +332,6 @@ function RootInner({
   const tabStoreApi = useTabStoreApi();
   const refreshProviderState = useRootProviderStateRefresh(services);
   useRootProviderSettingsSnapshot(services);
-  useEffect(() => {
-    let disposed = false;
-
-    void (async () => {
-      try {
-        await ensureProviderFamilyDomainMigration(services);
-      } catch (error) {
-        logger.warn("[Root] provider family domain 迁移失败，继续启动", {
-          error,
-        });
-      } finally {
-        if (!disposed) {
-          setProviderFamilyDomainMigrationComplete(true);
-          try {
-            await refreshAppSettings();
-            await refreshProviderState();
-          } catch (refreshError) {
-            logger.warn("[Root] provider family domain 迁移后刷新状态失败", {
-              error: refreshError,
-            });
-          }
-        }
-      }
-    })();
-
-    return () => {
-      disposed = true;
-    };
-  }, [refreshAppSettings, refreshProviderState, services]);
 
   const shouldPreferDirectoryBrowser = Boolean(preferDirectoryBrowser);
   const supportsEmbeddedBrowser = explicitSupportsEmbeddedBrowser ?? Boolean(isDesktop);
@@ -388,7 +340,6 @@ function RootInner({
     modelSelectionView: rootModelSelectionView,
   });
   const providerStartupSyncPending = isProviderStartupSyncPending({
-    providerFamilyDomainMigrationComplete,
     modelSelectionViewHydrated:
       rootProviderAvailability.hydrated || rootModelSelectionRead.state.status === "error",
   });
@@ -528,7 +479,6 @@ function RootInner({
   // Web 端继续使用该 gate 会在 workspace tab 注入前渲染空 RootShell，露出浏览器白底。
   const isStartupRenderBlocked = shouldShowRootStartupLoading({
     isDesktop,
-    welcomeScreenOpen: Boolean(welcomeScreenOpenReason),
     isResolvingStartupAuthState,
     isResolvingProviderStartupState,
     isRestoring,
@@ -540,7 +490,6 @@ function RootInner({
     if (
       !shouldReportLaunchToInput({
         isStartupRenderBlocked,
-        welcomeScreenOpen: Boolean(welcomeScreenOpenReason),
         alreadyReported: launchReportedRef.current,
       })
     ) {
@@ -558,7 +507,7 @@ function RootInner({
       inputReady: Date.now(), // T6
       sessionId: `launch-${timings.marks.createdAt}`,
     });
-  }, [isStartupRenderBlocked, welcomeScreenOpenReason]);
+  }, [isStartupRenderBlocked]);
 
   useRootPlatformEffects({
     initialWorkspaceAbsPath,
@@ -613,21 +562,11 @@ function RootInner({
   }, [platform]);
 
   useRootOAuthEffects({
-    accountIntentKey: JSON.stringify([
-      user?.id,
-      appSettings?.providerFamilyDomain,
-      appSettings?.providerFamilyConnectionSelections,
-    ]),
     platform,
     services,
     refreshProviderState,
-    refreshAppSettings,
     setUser,
     setIsRestoringOAuthSession,
-    setOAuthError,
-    oauthPollingActive,
-    setOAuthPollingActive,
-    markOAuthSuccess,
     onReauthenticationRequired: handleReauthenticationRequired,
   });
 
@@ -670,9 +609,7 @@ function RootInner({
   );
 
   const canEnterNativeThemeSyncSurface = Boolean(
-    !isStartupRenderBlocked &&
-    !welcomeScreenOpenReason &&
-    (workspaceShellPath || isSettingsTabActive),
+    !isStartupRenderBlocked && (workspaceShellPath || isSettingsTabActive),
   );
 
   useEffect(() => {
@@ -774,22 +711,6 @@ function RootInner({
     );
   }, [isSettingsTabActive, workspaceShellPath]);
 
-  useEffect(() => {
-    if (!loginEntryRequest) {
-      return;
-    }
-    // 登录入口已从模态弹窗收敛为 WelcomeScreen。
-    // provider 连接请求仍要先退出首次启动引导语义，避免连接完成后误创建默认 workspace。
-    setWelcomeScreenOpenReason("provider-request");
-  }, [loginEntryRequest]);
-
-  const handleWelcomeScreenComplete = useCallback(async () => {
-    await refreshAppSettings();
-    setWelcomeScreenOpenReason(null);
-  }, [refreshAppSettings]);
-  const handleWelcomeScreenClose = useCallback(() => {
-    setWelcomeScreenOpenReason(null);
-  }, []);
   const handleRemoteConnectionDialogOpenChange = useCallback((open: boolean) => {
     setRemoteConnectionDialogOpen(open);
     if (!open) {
@@ -861,20 +782,6 @@ function RootInner({
             之前阻塞恢复 tab / 初始 workspace 注入时重新渲染纯文字“加载中...”，所以启动被拆成两套 loading。
             这里复用同一套 SVG 启动画面，只把文案保留到 aria-label，保证视觉始终连续且不牺牲可访问性。 */}
         <RootStartupLoading label={loadingLabel} />
-      </RootShell>
-    );
-  }
-
-  if (welcomeScreenOpenReason) {
-    return (
-      <RootShell>
-        {rootModelSelectionErrorNode}
-        {remoteConnectionDialog}
-        {directoryBrowserDialog}
-        <WelcomeScreen
-          onComplete={handleWelcomeScreenComplete}
-          onClose={handleWelcomeScreenClose}
-        />
       </RootShell>
     );
   }

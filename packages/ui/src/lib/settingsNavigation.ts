@@ -179,11 +179,6 @@ export function setPendingSettingsSection(section: SettingsSectionId): void {
   setPendingSettingsSectionIntent(section);
 }
 
-export function setPendingSettingsUsageCodingPlanIntent(): void {
-  // 剩余额度详情入口需要直达 Coding Plan 使用统计。
-  setPendingSettingsSectionIntent("usage", { usageTab: "codingPlan" });
-}
-
 export function setPendingSettingsPluginIntent(
   tab: SettingsPluginTabTarget,
   options: {
@@ -368,23 +363,6 @@ export function clearPendingSettingsPluginOrigin(): void {
   }
 }
 
-export function consumePendingSettingsUsageTab(): SettingsUsageTabTarget | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem(SETTINGS_USAGE_TAB_INTENT_KEY);
-    if (raw !== null) {
-      window.sessionStorage.removeItem(SETTINGS_USAGE_TAB_INTENT_KEY);
-    }
-    return raw === "app" || raw === "codingPlan" ? raw : undefined;
-  } catch {
-    // 忽略浏览器存储异常，不影响主流程。
-    return undefined;
-  }
-}
-
 export function consumePendingSettingsModelProviderTarget():
   | SettingsModelProviderTarget
   | undefined {
@@ -405,27 +383,6 @@ export function consumePendingSettingsModelProviderTarget():
     // 忽略浏览器存储异常，不影响主流程。
     return undefined;
   }
-}
-
-export function shouldFallbackSettingsUsageTabToApp({
-  activeTab,
-  checkingCodingPlanTab,
-  loadingModelProviders,
-  showCodingPlanTab,
-}: {
-  activeTab: SettingsUsageTabTarget;
-  checkingCodingPlanTab: boolean;
-  loadingModelProviders: boolean;
-  showCodingPlanTab: boolean;
-}): boolean {
-  // Coding Plan 跳转意图可能先于 provider/entitlement 数据完成加载。
-  // 只有确认不再 loading 且仍没有有效套餐时才回退到 App Usage，避免“更多”点击后被首帧误改回默认 tab。
-  return (
-    activeTab === "codingPlan" &&
-    !showCodingPlanTab &&
-    !loadingModelProviders &&
-    !checkingCodingPlanTab
-  );
 }
 
 export function addPendingSettingsSectionListener(
