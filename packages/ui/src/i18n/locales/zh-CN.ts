@@ -6008,6 +6008,7 @@ const zhCN: Record<string, string> = {
   "settings.computerUse.toggleLabel": "启用电脑控制",
   "settings.computerUse.toggleDescription":
     "开启后启用由 Kimi Computer Use 提供的电脑控制工具与技能（macOS / Windows x64）。",
+  "settings.computerUse.toggleRequiresWorkspace": "需先打开一个本地项目，才能启用电脑控制。",
   "settings.computerUse.composerEntry.label": "在输入框显示电脑操作按钮",
   "settings.computerUse.composerEntry.description": "关闭后输入框不再显示电脑操作按钮。",
   "settings.computerUse.composerEntry.requiresEnabled":

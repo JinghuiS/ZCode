@@ -1,7 +1,7 @@
 // 设置页「电脑控制 (Computer Use)」分区：
 //  - 总开关：开/关官方电脑控制插件（连带其 kimi-cu MCP server 与 skill 一起启用/禁用）。
 //  - 输入框入口开关：控制输入框常驻「电脑操作」按钮的显隐。
-//  - 插件启用后展示 Kimi Computer Use 状态：安装与版本，macOS 另有辅助功能 / 屏幕录制授权，提供安装与授权入口。
+//  - Kimi Computer Use 状态（不依赖插件开关）：安装与版本，macOS 另有辅助功能 / 屏幕录制授权，提供安装与授权入口。
 // 电脑控制由 Kimi Computer Use（macOS: KimiCU.app；Windows x64: kimi-cu.exe）提供，见 specs/computer-use-kimi.md。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
@@ -85,7 +85,7 @@ export function ComputerUseSection({
     status: kimiStatus,
     loading: kimiLoading,
     refresh: refreshKimiStatus,
-  } = useKimiComputerUseStatus(supportsComputerUseSettings && cuaEnabled);
+  } = useKimiComputerUseStatus(supportsComputerUseSettings);
 
   const mountedRef = useRef(true);
   const pluginToggleGenerationRef = useRef(0);
@@ -311,7 +311,12 @@ export function ComputerUseSection({
       <SettingsGroupCard>
         <SettingsRow
           label={intl.formatMessage({ id: "settings.computerUse.toggleLabel" })}
-          description={intl.formatMessage({ id: "settings.computerUse.toggleDescription" })}
+          description={intl.formatMessage({
+            // 插件启停按工作区读写；没有打开工作区时开关置灰，这里说明原因而不是只留灰态。
+            id: workspacePath
+              ? "settings.computerUse.toggleDescription"
+              : "settings.computerUse.toggleRequiresWorkspace",
+          })}
           control={
             <Switch
               aria-label={intl.formatMessage({ id: "settings.computerUse.toggleLabel" })}
@@ -340,77 +345,75 @@ export function ComputerUseSection({
         />
       </SettingsGroupCard>
 
-      {/* 插件未启用时不探测 KimiCU，只留总开关。 */}
-      {cuaEnabled ? (
-        <SettingsGroupCard>
-          <SettingsRow
-            controlLayout="wide"
-            label={intl.formatMessage({ id: "settings.computerUse.kimi.title" })}
-            description={intl.formatMessage({ id: "settings.computerUse.kimi.description" })}
-            control={
-              <div className="flex items-center gap-2">
-                {renderBadge(installView)}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={intl.formatMessage({ id: "settings.computerUse.kimi.refresh" })}
-                  title={intl.formatMessage({ id: "settings.computerUse.kimi.refresh" })}
-                  disabled={kimiLoading}
-                  onClick={() => void refreshKimiStatus()}
-                >
-                  <RefreshCw
-                    className={kimiLoading ? "size-4 animate-spin" : "size-4"}
-                    aria-hidden="true"
-                  />
+      {/* KimiCU 状态独立于插件开关：未启用时也要能看到「未安装 → 安装」，否则新用户无从下手。 */}
+      <SettingsGroupCard>
+        <SettingsRow
+          controlLayout="wide"
+          label={intl.formatMessage({ id: "settings.computerUse.kimi.title" })}
+          description={intl.formatMessage({ id: "settings.computerUse.kimi.description" })}
+          control={
+            <div className="flex items-center gap-2">
+              {renderBadge(installView)}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={intl.formatMessage({ id: "settings.computerUse.kimi.refresh" })}
+                title={intl.formatMessage({ id: "settings.computerUse.kimi.refresh" })}
+                disabled={kimiLoading}
+                onClick={() => void refreshKimiStatus()}
+              >
+                <RefreshCw
+                  className={kimiLoading ? "size-4 animate-spin" : "size-4"}
+                  aria-hidden="true"
+                />
+              </Button>
+            </div>
+          }
+          detail={
+            kimiStatus?.supported && !kimiStatus.installed ? (
+              <div className="flex flex-col items-start gap-1">
+                <Button type="button" size="sm" onClick={() => void onInstall()}>
+                  {intl.formatMessage({ id: "settings.computerUse.kimi.install" })}
                 </Button>
+                <span className="text-ui-sm text-foreground-subtlest">
+                  {intl.formatMessage({ id: "settings.computerUse.kimi.installHint" })}
+                </span>
               </div>
-            }
-            detail={
-              kimiStatus?.supported && !kimiStatus.installed ? (
-                <div className="flex flex-col items-start gap-1">
-                  <Button type="button" size="sm" onClick={() => void onInstall()}>
-                    {intl.formatMessage({ id: "settings.computerUse.kimi.install" })}
-                  </Button>
-                  <span className="text-ui-sm text-foreground-subtlest">
-                    {intl.formatMessage({ id: "settings.computerUse.kimi.installHint" })}
-                  </span>
-                </div>
-              ) : serviceUnavailable ? (
-                <span className="text-ui-sm text-foreground-subtlest">
-                  {intl.formatMessage({ id: "settings.computerUse.kimi.serviceUnavailable" })}
-                </span>
-              ) : isKimiWindows && kimiInstalled ? (
-                <span className="text-ui-sm text-foreground-subtlest">
-                  {intl.formatMessage({ id: "settings.computerUse.kimi.windowsNote" })}
-                </span>
-              ) : undefined
-            }
-          />
-          {kimiInstalled && isKimiMacOs ? (
-            <>
-              <SettingsRow
-                controlLayout="wide"
-                label={intl.formatMessage({ id: "cuaPermission.perm.accessibility" })}
-                description={intl.formatMessage({
-                  id: "cuaPermission.perm.accessibility.purpose",
-                })}
-                control={renderBadge(permissionView(accessibilityState))}
-                detail={renderGrantDetail(accessibilityState)}
-              />
-              <SettingsRow
-                controlLayout="wide"
-                label={intl.formatMessage({ id: "cuaPermission.perm.screenRecording" })}
-                description={intl.formatMessage({
-                  id: "cuaPermission.perm.screenRecording.purpose",
-                })}
-                control={renderBadge(permissionView(screenRecordingState))}
-                detail={renderGrantDetail(screenRecordingState)}
-              />
-            </>
-          ) : null}
-        </SettingsGroupCard>
-      ) : null}
+            ) : serviceUnavailable ? (
+              <span className="text-ui-sm text-foreground-subtlest">
+                {intl.formatMessage({ id: "settings.computerUse.kimi.serviceUnavailable" })}
+              </span>
+            ) : isKimiWindows && kimiInstalled ? (
+              <span className="text-ui-sm text-foreground-subtlest">
+                {intl.formatMessage({ id: "settings.computerUse.kimi.windowsNote" })}
+              </span>
+            ) : undefined
+          }
+        />
+        {kimiInstalled && isKimiMacOs ? (
+          <>
+            <SettingsRow
+              controlLayout="wide"
+              label={intl.formatMessage({ id: "cuaPermission.perm.accessibility" })}
+              description={intl.formatMessage({
+                id: "cuaPermission.perm.accessibility.purpose",
+              })}
+              control={renderBadge(permissionView(accessibilityState))}
+              detail={renderGrantDetail(accessibilityState)}
+            />
+            <SettingsRow
+              controlLayout="wide"
+              label={intl.formatMessage({ id: "cuaPermission.perm.screenRecording" })}
+              description={intl.formatMessage({
+                id: "cuaPermission.perm.screenRecording.purpose",
+              })}
+              control={renderBadge(permissionView(screenRecordingState))}
+              detail={renderGrantDetail(screenRecordingState)}
+            />
+          </>
+        ) : null}
+      </SettingsGroupCard>
     </div>
   );
 }

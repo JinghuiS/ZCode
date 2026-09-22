@@ -1,4 +1,5 @@
 import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE } from "@zcode/contracts";
+import { isComputerUseDefaultEnabledPlatform } from "@zcode/shared";
 
 // 内置插件的商店信息 seed（原样写入官方 marketplace.json 的条目 raw，键名与 CDN 目录
 // schema 一致：displayName_i18n / examplePrompts_i18n 等），解析复用 adapter 的
@@ -328,14 +329,14 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     version: "0.2.0",
   },
   {
-    // 产品决策：电脑控制回退为默认关闭，需用户在设置页显式开启。
-    // 因此这里不声明 defaultEnabled——computer-use 携带 MCP server 与系统 Helper 依赖，
-    // 默认开启意味着每个新用户首启即注入整套工具集并拉起 Helper。
-    // 「defaultEnabled 仅限内容型插件」的旧约定随之恢复完整。
-    // 判定式是 enabledPlugins[id] ?? defaultEnabled：曾在设置页手动开过的用户已落盘
-    // 显式 true，不受本次默认值变更影响。改回默认开启时，需同步
-    // packages/shared/src/plugin-marketplaces.ts 的名单（bootstrap 单测机械对照两者）、
-    // isZCodeCuaInternalFeatureEnabled（打包层默认 true）与输入框入口 hidden 默认值的联动语义。
+    // 产品决策：电脑控制在 macOS / Windows 本机默认开启，新用户装好 KimiCU 即可使用。
+    // 开源版不再有系统 Helper：插件只带一个 stdio MCP 启动器，KimiCU 未安装时它挂一个无工具的
+    // 空 MCP（不报错、不拉起任何进程），所以默认开启不会给没装 KimiCU 的用户增加负担。
+    // Linux 与远端 Host 不默认开启（KimiCU 无 Linux 版，也不能操作远端桌面）。
+    // 判定式是 enabledPlugins[id] ?? defaultEnabled：用户手动关过的已落盘显式 false，不受影响。
+    // 与 packages/shared/src/plugin-marketplaces.ts 的名单同步（bootstrap 单测机械对照两者）；
+    // 输入框入口按钮仍默认隐藏，需在设置页单独打开。
+    defaultEnabled: isComputerUseDefaultEnabledPlatform(),
     name: "computer-use",
     // 开源版不含 zcode-cua 原生 Helper；电脑控制改由 Kimi Computer Use 的 stdio MCP 提供，
     // 插件身份（computer-use@zcode-plugins-official）与设置入口保持不变。见 specs/computer-use-kimi.md。
@@ -346,7 +347,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       displayName_i18n: { "zh-CN": "电脑控制" },
       description_i18n: {
         "zh-CN":
-          "由 Kimi Computer Use 驱动（macOS）：后台读取界面并完成点击、输入、滚动与拖拽，不抢鼠标、不切前台。",
+          "由 Kimi Computer Use 驱动（macOS / Windows x64）：读取界面并完成点击、输入、滚动与拖拽；macOS 上在后台完成，不抢鼠标、不切前台。",
       },
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/zcode-cua/icon.png`,
     },

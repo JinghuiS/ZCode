@@ -1,3 +1,14 @@
+/**
+ * 电脑控制（Kimi Computer Use）只作用于 macOS / Windows 本机：这两个平台上默认开启，
+ * 其余平台（Linux、远端 SSH/WSL/Docker 上运行的 Host）不默认注入其 MCP 与 skill。
+ * 只在 Node 侧（Host / bootstrap）求值；浏览器环境没有 process，按不开启处理。
+ */
+export function isComputerUseDefaultEnabledPlatform(
+  platform: string | undefined = typeof process === "undefined" ? undefined : process.platform,
+): boolean {
+  return platform === "darwin" || platform === "win32";
+}
+
 export interface DefaultPluginMarketplace {
   id: string;
   source: string;
@@ -24,7 +35,8 @@ export const DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set(
   "skill-creator@zcode-plugins-official",
   "plugin-creator@zcode-plugins-official",
   "zcode-guide@zcode-plugins-official",
-  // 电脑控制回退为默认关闭，故 computer-use 不在此名单内。
+  // 电脑控制在 macOS / Windows 本机默认开启（KimiCU 未安装时启动器只挂一个无工具的空 MCP）。
+  ...(isComputerUseDefaultEnabledPlatform() ? ["computer-use@zcode-plugins-official"] : []),
   // 该集合必须与 official-plugin-definitions.ts 里标了 defaultEnabled 的插件逐一对应，
   // bootstrap 的「Settings 默认启用集合与 CLI 的官方插件声明一致」单测机械对照两者。
 ]);

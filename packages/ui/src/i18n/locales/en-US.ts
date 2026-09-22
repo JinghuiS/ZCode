@@ -6272,6 +6272,7 @@ const enUS: Record<string, string> = {
   "settings.computerUse.toggleLabel": "Enable Computer Use",
   "settings.computerUse.toggleDescription":
     "Enables Computer Use tools and skill powered by Kimi Computer Use (macOS / Windows x64).",
+  "settings.computerUse.toggleRequiresWorkspace": "Open a local project to enable Computer Use.",
   "settings.computerUse.composerEntry.label": "Show Computer Use button in the composer",
   "settings.computerUse.composerEntry.description": "When off, the composer button is hidden.",
   "settings.computerUse.composerEntry.requiresEnabled":

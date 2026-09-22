@@ -191,7 +191,13 @@ stateDiagram-v2
   已安装 --> 就绪: macOS 两项权限均为 true
 ```
 
+- 入口：设置 → 基础设置 → 电脑控制（`settingsNavigation.ts` 不得把 `computerUse` 放进隐藏分区）。
 - 「启用电脑控制」开关与「在输入框显示电脑操作按钮」保留，行为不变（启用官方插件）。
+  插件在 macOS / Windows 本机**默认开启**（`isComputerUseDefaultEnabledPlatform`），Linux 与远端 Host 不默认开启；
+  输入框按钮仍默认隐藏。没有打开工作区时开关置灰，并在说明文字里提示「需先打开一个本地项目」。
+- KimiCU 状态卡片（安装 / 版本 / 授权）**不依赖插件开关**：未启用插件时也显示「未安装 → 安装」。
+- KimiCU 未安装时插件启动器不退出，而是挂一个无工具的空 MCP（安装指引写入 stderr 与 `instructions`），
+  避免默认开启后每个会话的 MCP 列表都出现报错 server；安装后新开对话即启动真正的 `kimi-cu mcp`。
 - 原 ZCode Helper 权限卡片替换为 KimiCU 状态卡片：安装状态与版本、「安装」「刷新」按钮，
   并注明 KimiCU 由 Moonshot AI 提供。macOS 另有辅助功能/屏幕录制两项权限与「授权」按钮；
   Windows 提示执行时会短暂占用键盘鼠标。远端 workspace 显示不支持。
