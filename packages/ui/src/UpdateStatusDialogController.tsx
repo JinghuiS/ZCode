@@ -61,6 +61,7 @@ export function UpdateStatusDialogController({
     progressLabel,
     progressValue,
     releaseNotesPayload: updateReleaseNotesPayload,
+    releaseUrl,
     skippableVersion,
   } = renderedUpdateStatusViewModel;
   const localizedUpdateReleaseNotes = getLocalizedUpdateReleaseNotes(
@@ -140,10 +141,7 @@ export function UpdateStatusDialogController({
   const restoredReleaseDate = formattedReleaseDate ?? cachedReleaseNotes?.releaseDateLabel ?? null;
   const visibleUpdateReleaseNotes =
     dialogPhase === "downloading" ? null : restoredUpdateReleaseNotes;
-  const handleOpenReleaseNotesExternalUrl = useCallback(
-    (url: string) => platform.openExternal(url),
-    [platform],
-  );
+  const handleOpenReleaseUrl = useCallback((url: string) => platform.openExternal(url), [platform]);
   const handleDownloadUpdate = useCallback(async () => {
     if (updateActionInFlightRef.current) {
       return;
@@ -292,7 +290,7 @@ export function UpdateStatusDialogController({
       onCancelDownload={handleCancelDownload}
       onDownloadUpdate={handleDownloadUpdate}
       onOpenChange={onOpenChange}
-      onOpenReleaseNotesExternalUrl={handleOpenReleaseNotesExternalUrl}
+      onOpenReleaseUrl={handleOpenReleaseUrl}
       onRestartUpdate={handleRestartUpdate}
       onSkipUpdate={handleSkipUpdate}
       open={open}
@@ -300,6 +298,7 @@ export function UpdateStatusDialogController({
       progressLabel={progressLabel}
       progressValue={progressValue}
       releaseDateLabel={releaseDateLabel}
+      releaseUrl={releaseUrl}
       showOverlay={showOverlay}
       skippableVersion={skippableVersion}
     />

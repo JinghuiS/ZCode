@@ -2,12 +2,9 @@ import type {
   McpPort,
   McpServerConfig,
   McpServerStatus,
-  McpStdioServerConfig,
 } from "@zcode/contracts";
 import {
   getCapturedZCodeCuaBrokerCredentials,
-  isZCodeCuaMcpCommand,
-  isZCodeCuaMcpPackageArg,
   ZCODE_CUA_BROKER_SOCKET_ENV_KEY,
   ZCODE_CUA_NODE_REPL_HOST_ENV_KEY,
   ZCODE_CUA_OFFICIAL_PLUGIN_ID,
@@ -33,12 +30,6 @@ const NODE_REPL_SERVER_NAME = "node_repl";
 const REFRESH_MARKER_ENV = "ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER";
 
 /**
- * 电脑控制插件（computer-use@zcode-plugins-official）现由 Kimi Computer Use 提供，
- * 其 manifest 声明的 stdio server 名为 kimi-cu。它带有该插件的 plugin id，但不是旧 zcode-cua。
- */
-const KIMI_COMPUTER_USE_MCP_SERVER_NAME = "kimi-cu";
-
-/**
  * Derive official CUA provenance from the in-memory plugin registry rather than
  * from serializable MCP fields. A user/project override replaces the config
  * object in `configuredServers`, so copied names, commands, and env values do
@@ -52,8 +43,7 @@ export function resolveTrustedOfficialCuaServerNames(
     Object.entries(pluginServers)
       .filter(
         ([name, config]) =>
-          // kimi-cu 是普通 MCP（Kimi Computer Use），不享有旧 zcode-cua 的 broker/图片 authority。
-          name !== KIMI_COMPUTER_USE_MCP_SERVER_NAME &&
+          // KimiCU（plugin:computer-use:kimi-cu）同属官方电脑控制插件，按同一来源校验进入可信 CUA。
           configuredServers[name] === config &&
           config.type === "stdio" &&
           config.env?.[ZCODE_PLUGIN_ID_ENV_KEY]?.trim().toLowerCase() ===
@@ -73,9 +63,6 @@ export async function listMcpServerStatuses(
   const statuses: Record<string, McpServerStatus> = {};
 
   for (const [name, config] of Object.entries(servers)) {
-    // 迁移后旧的 zcode-cua MCP 只是历史配置，不再进入状态投影；CUA
-    // 由 shared node_repl 承载，避免设置页继续把已删除的 server 显示为可用。
-    if (isRetiredCuaMcpServer(name, config)) continue;
     const configuredStatus = getConfiguredServerStatus(name, config, untrustedServerNames);
     statuses[name] = liveStatuses[name] ?? {
       status: configuredStatus,
@@ -88,7 +75,7 @@ export async function listMcpServerStatuses(
   }
 
   for (const [name, status] of Object.entries(liveStatuses)) {
-    if (!(name in statuses) && !isRetiredCuaMcpServer(name, servers[name])) statuses[name] = status;
+    if (!(name in statuses)) statuses[name] = status;
   }
 
   return statuses;
@@ -100,9 +87,7 @@ export function omitMcpServers(
   trustedOfficialCuaServerNames: ReadonlySet<string> = new Set(),
 ): Record<string, McpServerConfig> {
   const kept = Object.fromEntries(
-    Object.entries(servers).filter(
-      ([name, config]) => !omittedNames.has(name) && !isRetiredCuaMcpServer(name, config),
-    ),
+    Object.entries(servers).filter(([name]) => !omittedNames.has(name)),
   );
 
   return injectZCodeCuaBrokerMcpServers(
@@ -125,10 +110,6 @@ function injectZCodeCuaBrokerMcpServers(
   let changed = false;
   const next: Record<string, McpServerConfig> = {};
   for (const [name, config] of Object.entries(servers)) {
-    if (isRetiredCuaMcpServer(name, config)) {
-      changed = true;
-      continue;
-    }
     if (
       name !== NODE_REPL_SERVER_NAME ||
       !normalizedSocketPath ||
@@ -171,38 +152,6 @@ function injectCuaCredentialsIntoNodeRepl(
       [ZCODE_PLUGIN_ID_ENV_KEY]: ZCODE_CUA_OFFICIAL_PLUGIN_ID,
     },
   };
-}
-
-function isZCodeCuaStdioServer(
-  name: string,
-  config: McpServerConfig,
-): config is McpStdioServerConfig {
-  if (config.type !== "stdio") return false;
-  if (name === "computer-use") return true;
-  // 内置 official zcode-cua plugin 的 MCP server 走 __zcode-plugin-host，command 是 Helper
-  // (非 zcode-cua)、args 是 [zcode.cjs, __zcode-plugin-host, server.js]（非 zcode-cua package arg），
-  // 上面的 name/command/args 三条都匹配不到。_plugin id 由 adapters resolver 权威写入 env
-  // （manifest/user env 不可覆盖），用它识别 official plugin server。
-  if (
-    config.env?.[ZCODE_PLUGIN_ID_ENV_KEY]?.trim().toLowerCase() === ZCODE_CUA_OFFICIAL_PLUGIN_ID
-  ) {
-    return true;
-  }
-  // 判定与 desktop/services 共用 @zcode/shared 的单一事实源，避免两条注入入口漂移。
-  if (isZCodeCuaMcpCommand(config.command)) return true;
-  return (config.args ?? []).some(isZCodeCuaMcpPackageArg);
-}
-
-function isRetiredCuaMcpServer(name: string, config: McpServerConfig | undefined): boolean {
-  // node_repl is the single supported CUA host and may share the CUA plugin's
-  // authority marker; all other CUA-shaped MCP entries are retired.
-  // 修复：kimi-cu 同样带有官方电脑控制插件的 plugin id，若不豁免会被当作旧 zcode-cua 移除。
-  return (
-    name !== NODE_REPL_SERVER_NAME &&
-    name !== KIMI_COMPUTER_USE_MCP_SERVER_NAME &&
-    config !== undefined &&
-    isZCodeCuaStdioServer(name, config)
-  );
 }
 
 function getConfiguredServerStatus(

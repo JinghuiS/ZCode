@@ -1,8 +1,13 @@
 import { join } from "node:path";
-import { PROVIDER_AUTH_CHANGED_BROADCAST_CHANNEL } from "@zcode/shared";
+import {
+  PROVIDER_AUTH_CHANGED_BROADCAST_CHANNEL,
+  type ProviderAuthProviderId,
+  type ProviderAuthSubscriptionUsage,
+} from "@zcode/shared";
 import { withFileLock } from "@zcode/shared/node";
 import {
   createXaiProviderAuthAdapter,
+  fetchXaiSubscriptionUsage,
   ProviderAuthEngine,
   type ProviderAuthCredentialStore,
 } from "@zcode/provider-node";
@@ -16,6 +21,13 @@ const logger = createServiceLogger("providerAuthService");
 
 // 刷新 token 需要一次网络往返；其他进程等锁的上限要覆盖它，避免误判超时。
 const PROVIDER_AUTH_LOCK_MAX_WAIT_MS = 60_000;
+const USAGE_SUCCESS_TTL_MS = 5 * 60 * 1000;
+const USAGE_FAILURE_BACKOFF_MS = 30_000;
+
+interface CachedUsage {
+  expiresAt: number;
+  value: ProviderAuthSubscriptionUsage;
+}
 
 export interface ProviderAuthServiceBundle {
   /** 注册到 RPC 的 UI 门面，不含 token 读取能力。 */
@@ -29,6 +41,7 @@ export function createProviderAuthService(options: {
   broadcastService: Pick<IBroadcastService, "send">;
   appVersion: string;
   fetch?: typeof fetch;
+  now?: () => number;
 }): ProviderAuthServiceBundle {
   const lockFile = join(getAppConfigDir(), "provider-auth.lock");
   const store: ProviderAuthCredentialStore = {
@@ -38,15 +51,20 @@ export function createProviderAuthService(options: {
     withLock: (operation) =>
       withFileLock(lockFile, operation, { lockMaxWaitMs: PROVIDER_AUTH_LOCK_MAX_WAIT_MS }),
   };
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? (() => Date.now());
+  const usageCache = new Map<ProviderAuthProviderId, CachedUsage>();
+  const usageFlights = new Map<ProviderAuthProviderId, Promise<ProviderAuthSubscriptionUsage>>();
   const engine = new ProviderAuthEngine({
     store,
     adapters: [
       createXaiProviderAuthAdapter({
-        fetch: options.fetch ?? fetch,
+        fetch: fetchImpl,
         userAgent: `zcode/${options.appVersion}`,
       }),
     ],
     onChanged: (authProviderId) => {
+      usageCache.delete(authProviderId);
       logger.info("provider auth changed", { authProviderId });
       void options.broadcastService.send({
         channel: PROVIDER_AUTH_CHANGED_BROADCAST_CHANNEL,
@@ -70,8 +88,78 @@ export function createProviderAuthService(options: {
     async cancelLogin(loginId) {
       engine.cancelLogin(loginId);
     },
-    logout: (authProviderId) => engine.logout(authProviderId),
+    async logout(authProviderId) {
+      usageCache.delete(authProviderId);
+      await engine.logout(authProviderId);
+    },
+    async getSubscriptionUsage(input) {
+      if (input.authProviderId !== "xai") return { status: "unsupported" };
+      const cached = usageCache.get(input.authProviderId);
+      // 手动刷新只绕过成功快照；失败退避仍生效，避免 429 连打。
+      if (
+        cached &&
+        cached.expiresAt > now() &&
+        (!input.forceRefresh || cached.value.status !== "ready")
+      ) {
+        return cached.value;
+      }
+      const inflight = usageFlights.get(input.authProviderId);
+      if (inflight) return inflight;
+      const flight = loadXaiSubscriptionUsage({
+        engine,
+        fetchImpl,
+        userAgent: `zcode/${options.appVersion}`,
+        now,
+      })
+        .then((result) => {
+          usageCache.set(input.authProviderId, {
+            value: result.value,
+            expiresAt: now() + result.ttlMs,
+          });
+          return result.value;
+        })
+        .finally(() => {
+          usageFlights.delete(input.authProviderId);
+        });
+      usageFlights.set(input.authProviderId, flight);
+      return flight;
+    },
   };
 
   return { service, engine };
+}
+
+async function loadXaiSubscriptionUsage(input: {
+  engine: ProviderAuthEngine;
+  fetchImpl: typeof fetch;
+  userAgent: string;
+  now: () => number;
+}): Promise<{ value: ProviderAuthSubscriptionUsage; ttlMs: number }> {
+  let accessToken: string;
+  try {
+    accessToken = await input.engine.resolveAccessToken("xai");
+  } catch {
+    return { value: { status: "unavailable" }, ttlMs: USAGE_FAILURE_BACKOFF_MS };
+  }
+  const fetched = await fetchXaiSubscriptionUsage({
+    accessToken,
+    fetch: input.fetchImpl,
+    userAgent: input.userAgent,
+    now: input.now,
+  });
+  if (!fetched.ok) {
+    logger.warn("xAI SuperGrok 用量查询失败", { reason: fetched.reason });
+    return {
+      value: { status: "unavailable" },
+      ttlMs: fetched.retryAfterMs ?? USAGE_FAILURE_BACKOFF_MS,
+    };
+  }
+  return {
+    value: {
+      status: "ready",
+      fetchedAt: input.now(),
+      windows: fetched.windows,
+    },
+    ttlMs: USAGE_SUCCESS_TTL_MS,
+  };
 }

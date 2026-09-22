@@ -110,6 +110,17 @@ function createSharedDefines() {
     ),
     // 客户端只有一个 CDN 配置，与发布端 OSS 目标列表分离。
     __ZCODE_CDN_BASE_URL__: JSON.stringify(env.ZCODE_CDN_BASE_URL?.trim() || ""),
+    // 桌面更新源：分叉构建由 CI 用 ZCODE_UPDATE_GITHUB_REPO=${{ github.repository }} 注入实际仓库，
+    // 更新提示与下载因此指向本仓库的 GitHub Releases（见 specs/desktop-update-source.md）。
+    // 空串表示未配置，main 进程回退到 updateSource.ts 的兜底仓库或 service 源。
+    __ZCODE_UPDATE_GITHUB_REPO__: JSON.stringify(
+      process.env.ZCODE_UPDATE_GITHUB_REPO?.trim() || "",
+    ),
+    __ZCODE_UPDATE_SOURCE__: JSON.stringify(process.env.ZCODE_UPDATE_SOURCE?.trim() || ""),
+    // 分叉自持的强更配置地址；未注入时按更新源决定回退官方接口还是跳过启动强更校验。
+    __ZCODE_FORCE_UPDATE_CONFIG_URL__: JSON.stringify(
+      process.env.ZCODE_FORCE_UPDATE_CONFIG_URL?.trim() || "",
+    ),
   };
 }
 

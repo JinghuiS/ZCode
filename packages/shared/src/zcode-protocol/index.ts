@@ -1072,11 +1072,18 @@ const zcodeComputerUseToolScheduledEventSchema = zcodeComputerUseOperationEventB
   turnId: nonEmptyString,
   toolCallId: nonEmptyString,
   toolName: nonEmptyString,
-  // 这个 cell 是否在用 Computer Use。只表达布尔事实，不再携带动作名——旧的
-  // operationAction 靠从模型源码里抽取动作名得到，SDK 面一变就整体失配（见
-  // bootstrap/src/zcode-protocol/computer-use-operation-event.ts 的 usesComputerUse）。
+  // 这个 cell 是否在用 Computer Use。只表达布尔事实，不再携带动作名。
+  // 判定见 isComputerUseOperationToolCall（kimi-cu / 旧 computer-use / node_repl 引导）。
   // 只挂在 scheduled 上：ToolCallStartedPayload 没有 input，start 时已拿不到模型源码。
   computerUse: z.literal(true).optional(),
+  computerUseTarget: z
+    .object({
+      pid: z.number().int().positive().optional(),
+      app: z.string().trim().min(1).max(256).optional(),
+      windowId: z.number().int().positive().optional(),
+    })
+    .strict()
+    .optional(),
 });
 const zcodeComputerUseToolStartedEventSchema = zcodeComputerUseOperationEventBaseSchema.extend({
   kind: z.literal("tool-started"),

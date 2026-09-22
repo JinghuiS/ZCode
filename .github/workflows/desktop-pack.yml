@@ -1,0 +1,227 @@
+# 桌面安装包：原生 runner 调用 pnpm bundle:desktop，不在 YAML 里直接跑 electron-builder。
+# 规则见 specs/desktop-github-packaging.md。
+name: Desktop Pack
+
+on:
+  workflow_dispatch:
+    inputs:
+      zcode_env:
+        description: ZCODE_ENV（production 正式后端，test 测试后端）
+        type: choice
+        options:
+          - production
+          - test
+        default: production
+      preview_identity:
+        description: 使用 ZCode Preview 身份（可与正式版并排安装）
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: desktop-pack-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  HUSKY: "0"
+  CI: "true"
+  ZCODE_SKIP_REMOTE_ASSETS: "1"
+  # GitHub 托管 runner 走官方源；bundle.mjs 在 404 时仍会回退到 npmmirror。
+  ZCODE_ELECTRON_RUNTIME_MIRROR: https://github.com/electron/electron/releases/download/
+  ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+  ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+  ZCODE_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.zcode_env || 'production' }}
+  ZCODE_PREVIEW_IDENTITY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.preview_identity == 'true' && '1' || '0' }}
+  # 桌面更新源：安装包按本仓库坐标打包，更新提示与下载都指向该仓库的 GitHub Releases。
+  # 见 specs/desktop-update-source.md；留空则回退到客户端内置的兜底仓库。
+  ZCODE_UPDATE_GITHUB_REPO: ${{ github.repository }}
+  # 未注入证书时禁止 electron-builder 在 CI 钥匙串/证书库里自行挑身份，避免未签名包被误判失败。
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+jobs:
+  pack:
+    name: ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: mac
+            arch: arm64
+            runner: macos-15
+            dist_dir: dist-arm64
+          - os: mac
+            arch: x64
+            runner: macos-15-intel
+            dist_dir: dist-x64
+          - os: win
+            arch: x64
+            runner: windows-latest
+            dist_dir: dist-x64
+          - os: win
+            arch: arm64
+            runner: windows-11-arm
+            dist_dir: dist-arm64
+          - os: linux
+            arch: x64
+            runner: ubuntu-22.04
+            dist_dir: dist-x64
+          - os: linux
+            arch: arm64
+            runner: ubuntu-22.04-arm
+            dist_dir: dist-arm64
+    env:
+      ZCODE_TARGET_OS: ${{ matrix.os }}
+      ZCODE_TARGET_ARCH: ${{ matrix.arch }}
+      ZCODE_DESKTOP_DIST_DIR: ${{ matrix.dist_dir }}
+      ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.electron-builder-cache
+      TMPDIR: ${{ github.workspace }}/.tmp
+      TEMP: ${{ github.workspace }}/.tmp
+      TMP: ${{ github.workspace }}/.tmp
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Enable Windows long paths
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: git config --system core.longpaths true
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            .electron-cache
+            .electron-builder-cache
+          key: electron-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('packages/desktop/package.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-${{ matrix.os }}-${{ matrix.arch }}-
+
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fakeroot \
+            dpkg \
+            rpm \
+            cpio \
+            xz-utils \
+            libarchive-tools \
+            gcc \
+            g++ \
+            make \
+            python3
+
+      - name: Prepare temp directory
+        run: mkdir -p "${{ github.workspace }}/.tmp"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bundle desktop
+        run: pnpm bundle:desktop -- --os ${{ matrix.os }} --arch ${{ matrix.arch }}
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}-${{ matrix.arch }}
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            packages/desktop/${{ matrix.dist_dir }}/*.dmg
+            packages/desktop/${{ matrix.dist_dir }}/*.zip
+            packages/desktop/${{ matrix.dist_dir }}/*.exe
+            packages/desktop/${{ matrix.dist_dir }}/*.AppImage
+            packages/desktop/${{ matrix.dist_dir }}/*.deb
+            packages/desktop/${{ matrix.dist_dir }}/*.rpm
+            packages/desktop/${{ matrix.dist_dir }}/*.pkg.tar.zst
+            # 差分下载需要 blockmap：release job 据此在 latest*.yml 里写 blockMapSize。
+            packages/desktop/${{ matrix.dist_dir }}/*.blockmap
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+
+      - name: Generate update manifests
+        run: |
+          # 清单脚本只用 node 内置模块，这里不跑 pnpm install。
+          node packages/desktop/scripts/generate-update-manifests.mjs \
+            --dist dist \
+            --tag "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          files=(
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg.tar.zst
+            dist/*.blockmap
+            dist/latest*.yml
+          )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No desktop installers downloaded" >&2
+            exit 1
+          fi
+          # 预发布版本必须标记为 prerelease：客户端默认只读 /releases/latest，
+          # 只有打开「接收 preview 版本」的用户才会读到 prerelease。
+          prerelease_args=()
+          if printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-'; then
+            prerelease_args=(--prerelease)
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber
+          else
+            gh release create "$tag" "${files[@]}" --generate-notes "${prerelease_args[@]}"
+          fi

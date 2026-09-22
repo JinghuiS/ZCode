@@ -28,6 +28,9 @@ export type UpdateCheckResultPayload =
 
 /**
  * 桌面自动更新器的持续状态，用于同步原生菜单和 Windows 自绘标题栏菜单。
+ *
+ * `releaseUrl` 是更新来源的发布页面（GitHub 更新源为对应 Release 页面），
+ * 供弹窗提供「查看发布页面」的手动升级入口；服务端 manifest 源不带该字段。
  */
 export type UpdateStatePayload =
   | { kind: "idle"; enabled: boolean }
@@ -37,6 +40,7 @@ export type UpdateStatePayload =
       enabled: boolean;
       version: string;
       channel?: ElectronReleaseChannel;
+      releaseUrl?: string;
       releaseNotes?: PostUpdateReleaseNotesPayload;
     }
   | {
@@ -47,6 +51,7 @@ export type UpdateStatePayload =
       totalBytes?: number;
       version?: string;
       channel?: ElectronReleaseChannel;
+      releaseUrl?: string;
       releaseNotes?: PostUpdateReleaseNotesPayload;
     }
   | {
@@ -54,5 +59,6 @@ export type UpdateStatePayload =
       enabled: boolean;
       version: string;
       channel?: ElectronReleaseChannel;
+      releaseUrl?: string;
       releaseNotes?: PostUpdateReleaseNotesPayload;
     };

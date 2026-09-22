@@ -1,30 +1,59 @@
-import { BrowserWindow, screen } from "electron";
-import type { BrowserWindowConstructorOptions, Display, Point, Rectangle } from "electron";
-import type { HostCuaOperationStateResponse, Locale } from "@zcode/shared";
+/* eslint-disable max-lines -- 预览窗生命周期与捕获接线同文件，避免状态分叉。 */
+import { join } from "node:path";
+import { app, BrowserWindow, screen } from "electron";
+import type {
+  BrowserWindowConstructorOptions,
+  DesktopCapturerSource,
+  Display,
+  Point,
+  Rectangle,
+  Session,
+} from "electron";
+import type { ComputerUseTarget, HostCuaOperationStateResponse, Locale } from "@zcode/shared";
 import {
+  createComputerUsePreviewCapture,
+  type ComputerUsePreviewCapture,
+  type ComputerUsePreviewSink,
+} from "./computerUsePreviewCapture.js";
+import {
+  anchoredIndicatorBounds,
   INDICATOR_CARD_TOP_OFFSET,
   INDICATOR_SHADOW_INSET,
-  indicatorDataUrl,
   indicatorWindowSize,
+  previewClearScript,
+  previewFrameScript,
+  previewVideoStartScript,
+  supportsComputerUsePreview,
+  writeIndicatorPage,
 } from "./windowsCuaOperationIndicatorContent.js";
 
 const HIDE_ANIMATION_MS = 120;
-/**
- * 兜底隐藏时限。主导隐藏的是 turn 终态 / session 关闭 / runtime 不可用 / workspace 销毁
- * 这几条显式清除路径，这个计时器只在它们全部失约时收场，保证浮层不会无限期停留。
- *
- * 取 30s 而不是更短：CUA 事实现在按 cell 上报（每个 node_repl cell 一次），同一 turn 内
- * 后续 cell 会刷新计时器，但单个 cell 本身可以跑很久，10s 会让浮层在操作中途熄灭。
- */
+/** 仅在 turn 终态全部失约时收场；30s 覆盖单 cell 长跑，避免 10s 中途熄灭。 */
 const AUTO_HIDE_MS = 30_000;
 const CREATE_RETRY_MS = 250;
+/** 预览窗独立的内存分区：displayMedia 处理器只作用于它，不影响主窗口的屏幕共享。 */
+const PREVIEW_PARTITION = "cua-preview";
+const ANCHOR_EVENTS = ["move", "resize", "minimize", "restore", "show", "hide"] as const;
+type AnchorEvent = (typeof ANCHOR_EVENTS)[number];
+
+/** 发起电脑控制的对话窗；预览窗贴在它旁边并随它移动。 */
+export interface CuaPreviewAnchorWindow {
+  getBounds(): Rectangle;
+  isDestroyed(): boolean;
+  isMinimized(): boolean;
+  isVisible(): boolean;
+  on(event: AnchorEvent | "closed", listener: () => void): unknown;
+  removeListener(event: AnchorEvent | "closed", listener: () => void): unknown;
+}
 
 interface WindowsCuaOperationIndicatorWindow {
-  readonly webContents: Pick<BrowserWindow["webContents"], "executeJavaScript">;
+  readonly webContents: Pick<BrowserWindow["webContents"], "executeJavaScript"> & {
+    readonly session: Pick<Session, "setDisplayMediaRequestHandler">;
+  };
   destroy(): void;
   hide(): void;
   isDestroyed(): boolean;
-  loadURL(url: string): Promise<void>;
+  loadFile(path: string): Promise<void>;
   moveTop(): void;
   on(event: "closed", listener: () => void): this;
   setAlwaysOnTop(flag: boolean, level?: Parameters<BrowserWindow["setAlwaysOnTop"]>[1]): void;
@@ -54,8 +83,15 @@ interface WindowsCuaOperationIndicatorOptions {
   createWindow?: (options: BrowserWindowConstructorOptions) => WindowsCuaOperationIndicatorWindow;
   getCursorScreenPoint?: () => Point;
   getDisplayNearestPoint?: (point: Point) => Pick<Display, "workArea">;
+  getDisplayMatching?: (rect: Rectangle) => Pick<Display, "workArea">;
   schedule?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   cancelSchedule?: (timer: ReturnType<typeof setTimeout>) => void;
+  /** macOS ScreenCaptureKit 辅助程序路径。 */
+  resolveHelperBinary?: () => string | undefined;
+  /** 按 Host 进程找到对应的对话窗；找不到时预览窗退回屏幕顶部居中。 */
+  resolveAnchorWindow?: (source: object) => CuaPreviewAnchorWindow | undefined;
+  resolvePageDirectory?: () => string;
+  createCapture?: (input: { sink: ComputerUsePreviewSink }) => ComputerUsePreviewCapture;
 }
 
 export function createWindowsCuaOperationIndicator(
@@ -70,6 +106,10 @@ export function createWindowsCuaOperationIndicator(
     options.getCursorScreenPoint ?? (() => screen.getCursorScreenPoint());
   const getDisplayNearestPoint =
     options.getDisplayNearestPoint ?? ((point: Point) => screen.getDisplayNearestPoint(point));
+  const getDisplayMatching =
+    options.getDisplayMatching ?? ((rect: Rectangle) => screen.getDisplayMatching(rect));
+  const resolvePageDirectory =
+    options.resolvePageDirectory ?? (() => join(app.getPath("userData"), "computer-use-preview"));
   const schedule = options.schedule ?? ((callback, delayMs) => setTimeout(callback, delayMs));
   const cancelSchedule = options.cancelSchedule ?? ((timer) => clearTimeout(timer));
 
@@ -84,6 +124,72 @@ export function createWindowsCuaOperationIndicator(
   let reconcileTimer: ReturnType<typeof setTimeout> | null = null;
   let setupRetryAvailable = false;
   let disposed = false;
+  let anchorSource: object | undefined;
+  let attachedAnchor: CuaPreviewAnchorWindow | undefined;
+  /** Windows 取流目标；预览页 getDisplayMedia 时由分区的 displayMedia 处理器交出。 */
+  let pendingDisplaySource: DesktopCapturerSource | undefined;
+
+  function runPreviewScript(script: string, userGesture = false): void {
+    if (!window || window.isDestroyed() || !windowReady) return;
+    void window.webContents
+      .executeJavaScript(script, userGesture)
+      .catch((error) =>
+        options.logger.debug("[cua-operation-indicator] preview update failed", error),
+      );
+  }
+
+  function startPreviewVideo(): void {
+    if (pendingDisplaySource) runPreviewScript(previewVideoStartScript(), true);
+  }
+
+  const sink: ComputerUsePreviewSink = {
+    showFrame: (dataUrl) => runPreviewScript(previewFrameScript(dataUrl)),
+    showSource: (source) => {
+      pendingDisplaySource = source;
+      startPreviewVideo();
+    },
+    clear: () => {
+      pendingDisplaySource = undefined;
+      runPreviewScript(previewClearScript());
+    },
+  };
+  const capture =
+    options.createCapture?.({ sink }) ??
+    createComputerUsePreviewCapture({
+      platform,
+      resolveHelperBinary: options.resolveHelperBinary,
+      sink,
+      logger: options.logger,
+      schedule,
+      cancelSchedule,
+    });
+  const latestTargetByKey = new Map<string, ComputerUseTarget | undefined>();
+  let lastActivatedKey: string | undefined;
+
+  function isActiveKey(key: string): boolean {
+    for (const keys of activeTurnKeysBySource.values()) {
+      if (keys.has(key)) return true;
+    }
+    return false;
+  }
+
+  /** 跟随最近一次电脑控制操作的目标；它没有身份时退回任一有身份的活跃 turn。 */
+  function syncCaptureTarget(): void {
+    if (!hasActiveTurns()) {
+      capture.setTarget(undefined);
+      return;
+    }
+    let next =
+      lastActivatedKey && isActiveKey(lastActivatedKey)
+        ? latestTargetByKey.get(lastActivatedKey)
+        : undefined;
+    if (!next) {
+      for (const keys of activeTurnKeysBySource.values()) {
+        for (const key of keys) next ??= latestTargetByKey.get(key);
+      }
+    }
+    capture.setTarget(next);
+  }
 
   function hasActiveTurns(): boolean {
     for (const keys of activeTurnKeysBySource.values()) {
@@ -137,7 +243,12 @@ export function createWindowsCuaOperationIndicator(
       if (sourceKeys.size === 0) activeTurnKeysBySource.delete(source);
       // 安全计时器是 fail-hidden 边界：即使 runtime 没有补发 inactive，也不能让
       // 原生浮层无限期可见；后续 CUA tool-started 会重新建立该键并重新计时。
+      latestTargetByKey.delete(key);
       if (!hasActiveTurns()) beginHide();
+      else {
+        syncAnchorAndPosition();
+        syncCaptureTarget();
+      }
     }, AUTO_HIDE_MS);
     timers.set(key, timer);
   }
@@ -168,8 +279,56 @@ export function createWindowsCuaOperationIndicator(
     }
   }
 
+  function repositionToAnchor(): void {
+    if (disposed || !window || window.isDestroyed() || !hasActiveTurns()) return;
+    positionWindow(window);
+  }
+
+  function detachAnchor(): void {
+    if (!attachedAnchor) return;
+    const previous = attachedAnchor;
+    attachedAnchor = undefined;
+    if (previous.isDestroyed()) return;
+    for (const event of ANCHOR_EVENTS) previous.removeListener(event, repositionToAnchor);
+    previous.removeListener("closed", handleAnchorClosed);
+  }
+
+  function handleAnchorClosed(): void {
+    attachedAnchor = undefined;
+    repositionToAnchor();
+  }
+
+  /** 锚点切换时重新挂监听：对话窗移动、缩放、最小化时预览窗跟随。 */
+  function syncAnchor(): void {
+    if (anchorSource && !activeTurnKeysBySource.get(anchorSource)?.size) {
+      anchorSource = activeTurnKeysBySource.keys().next().value;
+    }
+    const next = anchorSource ? options.resolveAnchorWindow?.(anchorSource) : undefined;
+    const usable = next && !next.isDestroyed() ? next : undefined;
+    if (usable === attachedAnchor) return;
+    detachAnchor();
+    if (!usable) return;
+    attachedAnchor = usable;
+    for (const event of ANCHOR_EVENTS) usable.on(event, repositionToAnchor);
+    usable.on("closed", handleAnchorClosed);
+  }
+
+  function anchoredBounds(size: { width: number; height: number }): Rectangle | undefined {
+    const anchor = attachedAnchor;
+    if (!anchor || anchor.isDestroyed() || anchor.isMinimized() || !anchor.isVisible()) {
+      return undefined;
+    }
+    const bounds = anchor.getBounds();
+    return anchoredIndicatorBounds(bounds, getDisplayMatching(bounds).workArea, size);
+  }
+
   function positionWindow(target: WindowsCuaOperationIndicatorWindow): void {
     const { width, height } = indicatorWindowSize(options.getLocale());
+    const anchored = anchoredBounds({ width, height });
+    if (anchored) {
+      target.setBounds(anchored);
+      return;
+    }
     const point = getCursorScreenPoint();
     const { workArea } = getDisplayNearestPoint(point);
     target.setBounds({
@@ -199,7 +358,7 @@ export function createWindowsCuaOperationIndicator(
     try {
       positionWindow(target);
       void target
-        .loadURL(indicatorDataUrl(options.getLocale()))
+        .loadFile(writeIndicatorPage(resolvePageDirectory(), options.getLocale()))
         .then(() => {
           if (disposed || target !== window || target.isDestroyed()) return;
           windowReady = true;
@@ -214,6 +373,8 @@ export function createWindowsCuaOperationIndicator(
           showWindowOnTop(target);
           windowShown = true;
           setDocumentState("active");
+          // 页面重载（语言切换、窗口重建）会丢掉视频流；Windows 目标仍在时重新取流。
+          startPreviewVideo();
         })
         .catch((error) => handleLoadFailure(target, error));
     } catch (error) {
@@ -222,7 +383,7 @@ export function createWindowsCuaOperationIndicator(
   }
 
   function ensureWindow(repositionExisting = false): void {
-    if (disposed || platform !== "win32" || !hasActiveTurns()) return;
+    if (disposed || !supportsComputerUsePreview(platform) || !hasActiveTurns()) return;
     cancelPendingHide();
     if (window && !window.isDestroyed()) {
       if (repositionExisting) positionWindow(window);
@@ -262,6 +423,7 @@ export function createWindowsCuaOperationIndicator(
           contextIsolation: true,
           devTools: false,
           nodeIntegration: false,
+          partition: PREVIEW_PARTITION,
           sandbox: true,
         },
       });
@@ -271,6 +433,11 @@ export function createWindowsCuaOperationIndicator(
       ownedWindows.add(created);
       created.setIgnoreMouseEvents(true);
       created.setContentProtection(true);
+      created.webContents.session.setDisplayMediaRequestHandler((_request, callback) => {
+        // 只交出宿主已解析的目标窗口；没有目标时拒绝，页面不会得到任何屏幕内容。
+        if (pendingDisplaySource) callback({ video: pendingDisplaySource });
+        else callback({});
+      });
       created.on("closed", () => {
         const failedDuringSetup = failedWindows.delete(created as object);
         if (window === created) {
@@ -321,6 +488,9 @@ export function createWindowsCuaOperationIndicator(
 
   function beginHide(): void {
     setupRetryAvailable = false;
+    capture.setTarget(undefined);
+    anchorSource = undefined;
+    detachAnchor();
     if (!window || window.isDestroyed() || hideTimer) return;
     setDocumentState("leaving");
     const target = window;
@@ -333,14 +503,17 @@ export function createWindowsCuaOperationIndicator(
   }
 
   function handleState(source: object, event: HostCuaOperationStateResponse): void {
-    if (disposed || platform !== "win32") return;
+    if (disposed || !supportsComputerUsePreview(platform)) return;
     const key = keyFor(event);
     const sourceKeys = activeTurnKeysBySource.get(source);
     if (event.active) {
+      latestTargetByKey.set(key, event.computerUseTarget);
+      lastActivatedKey = key;
       if (sourceKeys?.has(key)) {
         cancelPendingHide();
         scheduleAutoHide(source, key);
         ensureWindow();
+        syncCaptureTarget();
         return;
       }
       const wasActive = hasActiveTurns();
@@ -349,27 +522,49 @@ export function createWindowsCuaOperationIndicator(
       nextKeys.add(key);
       activeTurnKeysBySource.set(source, nextKeys);
       scheduleAutoHide(source, key);
-      // 只有 aggregate 从空变为非空时按当前鼠标显示器重定位，避免并行 source 让窗口跳动。
-      ensureWindow(!wasActive);
+      // 最近发起电脑控制的对话窗作为锚点；并行 source 只在锚点变化时重定位。
+      const previousAnchor = attachedAnchor;
+      anchorSource = source;
+      syncAnchor();
+      ensureWindow(!wasActive || attachedAnchor !== previousAnchor);
+      syncCaptureTarget();
       return;
     }
     if (!sourceKeys?.delete(key)) return;
+    latestTargetByKey.delete(key);
     cancelAutoHide(source, key);
     if (sourceKeys.size === 0) activeTurnKeysBySource.delete(source);
     if (!hasActiveTurns()) beginHide();
+    else {
+      syncAnchorAndPosition();
+      syncCaptureTarget();
+    }
+  }
+
+  function syncAnchorAndPosition(): void {
+    const previousAnchor = attachedAnchor;
+    syncAnchor();
+    if (attachedAnchor !== previousAnchor) repositionToAnchor();
   }
 
   function clearSource(source: object): void {
-    if (disposed || platform !== "win32" || !activeTurnKeysBySource.delete(source)) return;
+    const sourceKeys = activeTurnKeysBySource.get(source);
+    if (disposed || !supportsComputerUsePreview(platform) || !sourceKeys) return;
+    activeTurnKeysBySource.delete(source);
+    for (const key of sourceKeys) latestTargetByKey.delete(key);
     const timers = autoHideTimersBySource.get(source);
     for (const key of timers ? [...timers.keys()] : []) {
       cancelAutoHide(source, key);
     }
     if (!hasActiveTurns()) beginHide();
+    else {
+      syncAnchorAndPosition();
+      syncCaptureTarget();
+    }
   }
 
   function refreshContent(): void {
-    if (disposed || platform !== "win32" || !window || window.isDestroyed()) return;
+    if (disposed || !supportsComputerUsePreview(platform) || !window || window.isDestroyed()) return;
     if (hasActiveTurns()) setupRetryAvailable = true;
     loadContent(window);
   }
@@ -382,6 +577,10 @@ export function createWindowsCuaOperationIndicator(
     if (disposed) return;
     disposed = true;
     setupRetryAvailable = false;
+    capture.stop();
+    detachAnchor();
+    pendingDisplaySource = undefined;
+    latestTargetByKey.clear();
     activeTurnKeysBySource.clear();
     for (const [source, timers] of autoHideTimersBySource) {
       for (const timer of timers.values()) cancelSchedule(timer);

@@ -233,9 +233,17 @@ const PACKAGING_PRUNE_PATTERNS = [
   "!**/SECURITY*",
 ];
 
-function buildDesktopArtifactName(platformName, extension = "${ext}") {
+function buildDesktopArtifactName(platformName, extension = "${ext}", arch = "${arch}") {
   // 测试环境产物必须和正式安装包文件名区分，避免上传、下载或人工验收时混用。
-  return `\${productName}-\${version}-${platformName}-\${arch}${desktopArtifactEnvSuffix}.${extension}`;
+  return `\${productName}-\${version}-${platformName}-${arch}${desktopArtifactEnvSuffix}.${extension}`;
+}
+
+// Linux 产物名里的架构直接写 Node 的 process.arch（x64/arm64）：electron-builder 的 ${arch} 宏
+// 会按格式改写成 x86_64（AppImage/rpm）、amd64（deb）、aarch64（rpm/pacman），而 electron-updater
+// 的 findFile 按 process.arch 在文件名里做子串匹配，匹配不到就退回第一个文件，会装错架构。
+// 每个 CI job 只打一个架构，targetPlatform.arch 即本次打包的目标架构。
+function buildLinuxArtifactName(extension = "${ext}") {
+  return buildDesktopArtifactName("linux", extension, targetPlatform.arch);
 }
 
 function runAsarCommand(args) {
@@ -576,6 +584,11 @@ export default {
             from: "resources/macos-window-bounds/zcode-window-bounds",
             to: "macos-window-bounds/zcode-window-bounds",
           },
+          {
+            // 电脑控制预览：ScreenCaptureKit 解析目标窗口并取流。缺失时预览窗只亮空壳。
+            from: "resources/macos-cua-preview/zcode-cua-preview",
+            to: "macos-cua-preview/zcode-cua-preview",
+          },
         ]
       : []),
     {
@@ -660,6 +673,7 @@ export default {
     artifactName: buildDesktopArtifactName("mac"),
     extendInfo: {
       NSAppleEventsUsageDescription: `${desktopProductIdentity.productName} needs Apple Events access to coordinate local automation workflows with user-approved desktop apps.`,
+      NSScreenCaptureUsageDescription: `${desktopProductIdentity.productName} shows a live preview of the window it is controlling.`,
     },
     // 预签名脚本走的是原生 codesign，要求完整的 "Developer ID Application: ..." 身份串；
     // 但 electron-builder 的 mac.identity 在 26.x 下会拒绝带此前缀的名字。
@@ -693,7 +707,7 @@ export default {
   },
   linux: {
     target: ["AppImage", "deb", "rpm", "pacman"],
-    artifactName: buildDesktopArtifactName("linux"),
+    artifactName: buildLinuxArtifactName(),
     // desktop 包名是 scoped package（@zcode/desktop），electron-builder 默认会把
     // Linux executable/Icon 推成 @zcodedesktop。部分桌面环境无法按这个 icon name 命中
     // hicolor 图标，最终回退成系统齿轮。这里固定成稳定的小写名称，让 Icon=zcode
@@ -713,7 +727,7 @@ export default {
     // 陈旧默认集合，避免安装阶段因已移除包名直接失败。
     depends: PACMAN_RUNTIME_DEPENDENCIES,
     // Electron Builder 默认把 pacman target 命名为 .pacman；Arch 原生包的标准扩展名是 .pkg.tar.zst。
-    artifactName: buildDesktopArtifactName("linux", "pkg.tar.zst"),
+    artifactName: buildLinuxArtifactName("pkg.tar.zst"),
   },
   rpm: {
     // 与 deb 同一约束：生产版与 Preview 必须是两个独立 rpm 包，否则 dnf 会把另一 flavor 当成升级替换。

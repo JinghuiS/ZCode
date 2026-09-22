@@ -9,10 +9,14 @@ import {
 } from "@zcode/shared";
 import { requestForceAutoUpdate, type ForceAutoUpdateState } from "./autoUpdater.js";
 import { showForceUpdatePrompt } from "./forceUpdatePrompt.js";
+import { resolveDesktopUpdateSourceFromRuntime } from "./updateSource.js";
 
 const ZCODE_CLIENT_CONFIG_API_PATH = "/api/v1/client/configs";
 const FORCE_UPDATE_CONFIG_REQUEST_TIMEOUT_MS = 10_000;
 const FORCE_UPDATE_CONFIG_MAX_RESPONSE_BYTES = 1024 * 1024;
+const FORCE_UPDATE_CONFIG_URL_ENV = "ZCODE_FORCE_UPDATE_CONFIG_URL";
+
+declare const __ZCODE_FORCE_UPDATE_CONFIG_URL__: string | undefined;
 
 export interface ForceUpdateDialogText {
   title: string;
@@ -44,7 +48,47 @@ interface ForceUpdateGuardOptions {
   onBlocked?: (requirement: ForceUpdateRequirement) => void;
 }
 
-function resolveForceUpdateClientConfigUrl(endpointOrigin = DEFAULT_ZCODE_ENDPOINT_ORIGIN): string {
+/**
+ * 分叉自持的强更配置地址。未配置时返回 undefined，由 resolveForceUpdateClientConfigUrl
+ * 按更新源决定是回退到官方接口还是跳过校验。
+ */
+export function resolveForceUpdateConfigUrlOverride(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const raw =
+    env[FORCE_UPDATE_CONFIG_URL_ENV]?.trim() ||
+    (typeof __ZCODE_FORCE_UPDATE_CONFIG_URL__ === "undefined"
+      ? ""
+      : __ZCODE_FORCE_UPDATE_CONFIG_URL__.trim());
+  if (!raw) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 强更配置来源。
+ *
+ * - 分叉自持地址优先；
+ * - GitHub 更新源的构建不读官方 /client/configs：分叉版本迟早会落后官方最低版本，
+ *   继续读会让启动 gate 把用户推向官方安装包并挡住自更新；
+ * - 其余情况保持官方接口（行为不变）。
+ */
+function resolveForceUpdateClientConfigUrl(endpointOrigin = DEFAULT_ZCODE_ENDPOINT_ORIGIN) {
+  const override = resolveForceUpdateConfigUrlOverride();
+  if (override) {
+    return override;
+  }
+  if (resolveDesktopUpdateSourceFromRuntime().kind === "github") {
+    return null;
+  }
+
   const url = new URL(
     `${buildZCodeEndpointUrls(endpointOrigin).origin}${ZCODE_CLIENT_CONFIG_API_PATH}`,
   );
@@ -72,7 +116,7 @@ function getForceUpdateMinimalVersionFromClientConfig(config: unknown): string |
 }
 
 async function fetchRemoteForceUpdateConfig(
-  endpointOrigin?: string,
+  configUrl: string,
   fetchRemoteConfig?: () => Promise<unknown>,
 ): Promise<unknown> {
   if (fetchRemoteConfig) {
@@ -111,7 +155,7 @@ async function fetchRemoteForceUpdateConfig(
     }, FORCE_UPDATE_CONFIG_REQUEST_TIMEOUT_MS);
     timer.unref?.();
 
-    request = net.request(resolveForceUpdateClientConfigUrl(endpointOrigin));
+    request = net.request(configUrl);
     request.on("response", (response) => {
       const statusCode = response.statusCode ?? 0;
       if (statusCode < 200 || statusCode >= 300) {
@@ -152,6 +196,12 @@ async function resolveDesktopForceUpdateRequirement(options: {
   endpointOrigin?: string;
   fetchRemoteConfig?: () => Promise<unknown>;
 }): Promise<ForceUpdateRequirement | null> {
+  const configUrl = resolveForceUpdateClientConfigUrl(options.endpointOrigin);
+  if (!configUrl) {
+    options.logger.info("[force-update] github 更新源未配置自持强更配置，跳过启动强更校验");
+    return null;
+  }
+
   const resolveFromConfig = (config: unknown) =>
     resolveForceUpdateRequirement({
       currentVersion: ZCODE_VERSION,
@@ -164,10 +214,7 @@ async function resolveDesktopForceUpdateRequirement(options: {
     });
 
   try {
-    const remoteConfig = await fetchRemoteForceUpdateConfig(
-      options.endpointOrigin,
-      options.fetchRemoteConfig,
-    );
+    const remoteConfig = await fetchRemoteForceUpdateConfig(configUrl, options.fetchRemoteConfig);
     const remoteRequirement = resolveFromConfig(remoteConfig);
     if (remoteRequirement) {
       return remoteRequirement;
@@ -185,6 +232,12 @@ function resolveForceUpdateDownloadUrl(
   locale: Locale,
   endpointOrigin = DEFAULT_ZCODE_ENDPOINT_ORIGIN,
 ): string {
+  const source = resolveDesktopUpdateSourceFromRuntime();
+  if (source.kind === "github") {
+    // 分叉发行的手动升级入口是自仓库的 Release 列表，官方站点的 /cn /en 对分叉用户没有意义。
+    return `https://github.com/${source.owner}/${source.repo}/releases`;
+  }
+
   const origin = buildZCodeEndpointUrls(endpointOrigin).origin;
   return locale === "zh-CN" ? `${origin}/cn` : `${origin}/en`;
 }

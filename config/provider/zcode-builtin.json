@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 31,
+  "revision": 32,
   "config": {
     "providerConfigRules": {
       "templateRules": [
@@ -395,7 +395,7 @@
               "type": "openai-responses",
               "baseUrl": "https://api.x.ai/v1"
             },
-            "builtinModelIds": ["grok-4.6", "grok-build-0.1", "grok-4.3"],
+            "builtinModelIds": ["grok-4.7", "grok-4.6", "grok-build-0.1", "grok-4.3"],
             "logo": {
               "type": "builtin",
               "key": "xai"
@@ -1422,6 +1422,29 @@
             "optionSpecs": {
               "reasoningLevel": {
                 "values": ["low", "medium", "high", "xhigh", "max"]
+              },
+              "maxOutputTokens": {
+                "max": 128000
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*grok-4\\.7(?:[.\\-:/\\[].*)?",
+          "config": {
+            "properties": {
+              "contextWindow": 500000,
+              "inputFormat": {
+                "supportsImage": true,
+                "supportsVideo": false,
+                "supportsAudio": false,
+                "supportsPdf": false
+              },
+              "supportsJsonSchemaOutput": true
+            },
+            "optionSpecs": {
+              "reasoningLevel": {
+                "values": ["low", "medium", "high", "xhigh"]
               },
               "maxOutputTokens": {
                 "max": 128000
@@ -2558,6 +2581,17 @@
             "optionSpecs": {
               "reasoningLevel": {
                 "map": "{\n  \"thinking\": {\n    \"type\": \"adaptive\"\n  },\n  \"output_config\": {\n    \"effort\": reasoningLevel\n  }\n}"
+              }
+            }
+          }
+        },
+        {
+          "modelMatch": ".*grok-4\\.7(?:[.\\-:/\\[].*)?",
+          "apiTypeMatch": "openai-responses",
+          "config": {
+            "optionSpecs": {
+              "reasoningLevel": {
+                "map": "{\n  \"reasoning\": {\n    \"effort\": reasoningLevel\n  }\n}"
               }
             }
           }
@@ -4643,6 +4677,13 @@
         {
           "modelId": "claude-haiku-4-5-20251001",
           "templateId": "anthropic",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "modelId": "grok-4.7",
+          "templateId": "xai",
           "config": {
             "enabled": true
           }

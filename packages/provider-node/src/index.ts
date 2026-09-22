@@ -14,3 +14,4 @@ export * from "./model-selection-facade.js";
 export * from "./runtime-paths.js";
 export * from "./provider-auth/provider-auth-engine.js";
 export * from "./provider-auth/xai-provider-auth-adapter.js";
+export * from "./provider-auth/xai-subscription-usage.js";

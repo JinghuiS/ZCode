@@ -14,6 +14,7 @@ export type UpdateStatusViewModel = {
   progressLabel: string | null;
   progressValue: number;
   releaseNotesPayload: PostUpdateReleaseNotesPayload | undefined;
+  releaseUrl: string | null;
   skippableVersion: string | null;
   updateChannel: ElectronReleaseChannel | undefined;
 };
@@ -47,6 +48,8 @@ export function deriveUpdateStatusViewModel({
     progressLabel: getUpdateDownloadProgressLabel(updateState),
     progressValue: getUpdateDownloadProgressValue(updateState),
     releaseNotesPayload: getUpdateReleaseNotesPayload(updateState),
+    // GitHub 更新源才带发布页地址；没有它时弹窗不展示「查看发布页面」，与旧行为一致。
+    releaseUrl: getUpdateReleaseUrl(updateState),
     skippableVersion:
       updateState?.kind === "update-available" || updateState?.kind === "download-progress"
         ? (updateState.version ?? null)
@@ -128,6 +131,14 @@ function getUpdateReleaseNotesPayload(updateState: UpdateStatePayload | null) {
     updateState?.kind === "update-downloaded"
     ? updateState.releaseNotes
     : undefined;
+}
+
+function getUpdateReleaseUrl(updateState: UpdateStatePayload | null) {
+  return updateState?.kind === "update-available" ||
+    updateState?.kind === "download-progress" ||
+    updateState?.kind === "update-downloaded"
+    ? (updateState.releaseUrl ?? null)
+    : null;
 }
 
 function formatMegabytes(bytes: number) {

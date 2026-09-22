@@ -2843,9 +2843,12 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               // browser-use：agent 的 interaction/browserExecute 经 zcodeAgentService 转到这个 executor，
               // 再经 parentPort 到 main 的 WebContentsView+CDP 执行。
               browserControlExecutor: browserControlMainBridge,
-              // CUA 顶部提示属于物理 Windows 桌面投影；非 Windows 和远端 authority 都不得上报。
+              // 电脑控制预览属于本机桌面投影；远端 authority 不得上报。
+              // macOS / Windows 都要送到 Main：空壳预览窗与后续捕获共用这条 turn 活跃态。
               cuaOperationStateReporter:
-                process.platform === "win32" ? cuaOperationStateReporter : undefined,
+                process.platform === "win32" || process.platform === "darwin"
+                  ? cuaOperationStateReporter
+                  : undefined,
             });
             activeServices = initializedServices;
             activeHostApiNetworkTransport = hostApiNetworkTransport;

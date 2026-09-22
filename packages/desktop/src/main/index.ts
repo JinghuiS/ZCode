@@ -627,10 +627,32 @@ const cuaPipFocusRouter = createCuaPipFocusRouter({
   },
 });
 const hostRunningTaskCountMap = new Map<ElectronUtilityProcess, number>();
+function resolveComputerUsePreviewHelperBinary(): string | undefined {
+  if (process.platform !== "darwin") return undefined;
+  const relative = join("macos-cua-preview", "zcode-cua-preview");
+  return app.isPackaged
+    ? join(process.resourcesPath, relative)
+    : join(import.meta.dirname, "..", "..", "resources", relative);
+}
+
+/** 电脑控制预览窗的锚点：由该 Host 进程承载的对话窗，多个时优先当前聚焦的那个。 */
+function resolveComputerUsePreviewAnchorWindow(source: object): BrowserWindow | undefined {
+  const candidates: BrowserWindow[] = [];
+  for (const [windowId, hostProcess] of windowHostProcessMap) {
+    if (hostProcess !== source) continue;
+    const win = BrowserWindow.fromId(windowId);
+    if (win && !win.isDestroyed()) candidates.push(win);
+  }
+  const focused = BrowserWindow.getFocusedWindow();
+  return candidates.find((win) => win === focused) ?? candidates[0];
+}
+
 const windowsCuaOperationIndicator = createWindowsCuaOperationIndicator({
   platform: process.platform,
   getLocale: () => currentApplicationLocale,
   logger,
+  resolveHelperBinary: resolveComputerUsePreviewHelperBinary,
+  resolveAnchorWindow: resolveComputerUsePreviewAnchorWindow,
 });
 
 // 常驻 cron scheduler 进程句柄；app ready 后拉起，退出前销毁。

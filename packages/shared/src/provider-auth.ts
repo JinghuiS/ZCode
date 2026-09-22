@@ -63,6 +63,40 @@ export type ProviderAuthLoginResult =
   | { status: "cancelled" }
   | { status: "failed"; errorMessage: string };
 
+/**
+ * SuperGrok 套餐用量窗口。百分比是已用占比；UI 展示剩余（100 - usedPercent）。
+ * used / limit 仅月度 credits 有绝对值时出现，周池通常只有百分比。
+ */
+export const providerAuthUsageWindowSchema = z
+  .object({
+    kind: z.enum(["week", "month"]),
+    usedPercent: z.number(),
+    remainingPercent: z.number(),
+    /** Unix 毫秒。 */
+    resetAt: z.number().optional(),
+    used: z.number().optional(),
+    limit: z.number().optional(),
+  })
+  .strict();
+export type ProviderAuthUsageWindow = z.infer<typeof providerAuthUsageWindowSchema>;
+
+/**
+ * Host 归一化后的套餐用量快照。token 与原始 billing JSON 不经 RPC 下发。
+ * unsupported：该 authProvider 没有套餐用量查询；unavailable：未连接或拉取失败。
+ */
+export const providerAuthSubscriptionUsageSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("unsupported") }).strict(),
+  z.object({ status: z.literal("unavailable") }).strict(),
+  z
+    .object({
+      status: z.literal("ready"),
+      fetchedAt: z.number(),
+      windows: z.array(providerAuthUsageWindowSchema).min(1),
+    })
+    .strict(),
+]);
+export type ProviderAuthSubscriptionUsage = z.infer<typeof providerAuthSubscriptionUsageSchema>;
+
 /** 凭据变化后广播，其他窗口据此刷新卡片状态。 */
 export const PROVIDER_AUTH_CHANGED_BROADCAST_CHANNEL = "provider-auth:changed";
 

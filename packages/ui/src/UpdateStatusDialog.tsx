@@ -30,6 +30,7 @@ export function UpdateStatusDialog({
   onCancelDownload,
   onDownloadUpdate,
   onOpenChange,
+  onOpenReleaseUrl,
   onRestartUpdate,
   onSkipUpdate,
   open,
@@ -37,6 +38,7 @@ export function UpdateStatusDialog({
   progressLabel,
   progressValue,
   releaseDateLabel,
+  releaseUrl,
   showOverlay = true,
   skippableVersion,
 }: {
@@ -50,7 +52,7 @@ export function UpdateStatusDialog({
   onCancelDownload: () => Promise<void>;
   onDownloadUpdate: () => Promise<void>;
   onOpenChange: (open: boolean) => void;
-  onOpenReleaseNotesExternalUrl: (url: string) => void;
+  onOpenReleaseUrl: (url: string) => void;
   onRestartUpdate: () => Promise<void>;
   onSkipUpdate: () => Promise<void>;
   open: boolean;
@@ -58,6 +60,8 @@ export function UpdateStatusDialog({
   progressLabel: string | null;
   progressValue: number;
   releaseDateLabel: string | null;
+  /** 更新来源的发布页面地址；服务端 manifest 源没有该地址。 */
+  releaseUrl: string | null;
   showOverlay?: boolean;
   skippableVersion: string | null;
 }) {
@@ -206,6 +210,18 @@ export function UpdateStatusDialog({
               edgeToEdge ? "w-auto flex-row justify-end" : null,
             )}
           >
+            {releaseUrl ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="h-9 px-4"
+                disabled={isUpdateActionPending}
+                onClick={() => onOpenReleaseUrl(releaseUrl)}
+              >
+                {intl.formatMessage({ id: "updateDialog.openReleasePage" })}
+              </Button>
+            ) : null}
             {showLaterButton ? (
               <Button
                 type="button"

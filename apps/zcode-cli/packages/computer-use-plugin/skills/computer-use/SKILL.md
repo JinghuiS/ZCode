@@ -14,6 +14,8 @@ description: |
 
 1. **找应用**：`list_apps` 列出正在运行的 app。目标没在运行时，先请用户打开，或用 shell 启动
    （macOS：`open -a "<App>"`；Windows：`Start-Process "<程序>"`）。
+   之后对该 app 的每次调用都传 `list_apps` 返回的 `pid`（而不只是 `app` 名）：
+   ZCode 据此把操作的窗口实时投到对话旁的预览窗里，用户可以看到你在做什么。
 2. **看界面**：`get_app_state` 获取目标窗口的无障碍树和截图。
    - 树节点带 `index`，`click` / `set_value` / `select_text` / `perform_secondary_action` 直接引用它。
    - 截图像素坐标用于 `click` / `scroll` / `drag` / `drag_paths`，工具会换算到真实窗口。

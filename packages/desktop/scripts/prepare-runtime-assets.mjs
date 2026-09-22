@@ -30,7 +30,9 @@ const localRuntimeScripts = [
   "prepare:agent-bundle",
   ...(nativeSearchReleasePlan.enabled ? ["prepare:native-search"] : []),
   ...(shouldPrepareWindowsBrowserImportHelper ? ["prepare:browser-import-helper"] : []),
-  ...(shouldPrepareMacosWindowBounds ? ["prepare:macos-window-bounds"] : []),
+  ...(shouldPrepareMacosWindowBounds
+    ? ["prepare:macos-window-bounds", "prepare:macos-cua-preview"]
+    : []),
 ];
 
 function runTimedPnpmScript(scriptName) {

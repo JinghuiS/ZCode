@@ -4,6 +4,7 @@ import {
   type ProviderAuthLoginResult,
   type ProviderAuthProviderId,
   type ProviderAuthStatus,
+  type ProviderAuthSubscriptionUsage,
 } from "@zcode/shared";
 import { createServiceDescriptor } from "../descriptors.js";
 
@@ -20,6 +21,14 @@ export interface IProviderAuthService {
   awaitLogin(loginId: string): Promise<ProviderAuthLoginResult>;
   cancelLogin(loginId: string): Promise<void>;
   logout(authProviderId: ProviderAuthProviderId): Promise<void>;
+  /**
+   * SuperGrok 套餐用量快照。token 留在 Host；非 xAI 返回 unsupported。
+   * forceRefresh 绕过成功缓存，仍遵守失败退避。
+   */
+  getSubscriptionUsage(input: {
+    authProviderId: ProviderAuthProviderId;
+    forceRefresh?: boolean;
+  }): Promise<ProviderAuthSubscriptionUsage>;
 }
 
 export const IProviderAuthService = createServiceDescriptor<IProviderAuthService>(

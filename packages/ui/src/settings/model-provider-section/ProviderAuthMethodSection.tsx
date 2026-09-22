@@ -3,8 +3,10 @@ import type { ProviderAuthProviderId } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
 import { useProviderAuth } from "@/hooks/useProviderAuth.js";
+import { useProviderAuthSubscriptionUsage } from "@/hooks/useProviderAuthSubscriptionUsage.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { XaiSubscriptionUsageCard } from "@/settings/model-provider-section/XaiSubscriptionUsageCard.js";
 
 export type ProviderAuthMethod = "account" | "api-key";
 
@@ -103,6 +105,13 @@ export function ProviderAuthMethodSection({
   const { status, loginState, startLogin, cancelLogin, logout } = useProviderAuth(
     method === "account" ? authProviderId : undefined,
   );
+  const showXaiUsage =
+    method === "account" && authProviderId === "xai" && status?.status === "connected";
+  const {
+    usage: xaiUsage,
+    loading: xaiUsageLoading,
+    refresh: refreshXaiUsage,
+  } = useProviderAuthSubscriptionUsage(authProviderId, showXaiUsage);
   const connectedAccountLabel = status?.account?.email ?? status?.account?.name;
 
   return (
@@ -169,21 +178,30 @@ export function ProviderAuthMethodSection({
               ) : null}
             </div>
           ) : status?.status === "connected" ? (
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex min-w-0 items-center gap-2 text-foreground">
-                <CheckCircle2Icon className="size-4 shrink-0 text-success" aria-hidden="true" />
-                <span className="truncate">
-                  {connectedAccountLabel
-                    ? intl.formatMessage(
-                        { id: "settings.modelProvider.auth.connectedAs" },
-                        { account: connectedAccountLabel },
-                      )
-                    : intl.formatMessage({ id: "settings.modelProvider.auth.connected" })}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-2 text-foreground">
+                  <CheckCircle2Icon className="size-4 shrink-0 text-success" aria-hidden="true" />
+                  <span className="truncate">
+                    {connectedAccountLabel
+                      ? intl.formatMessage(
+                          { id: "settings.modelProvider.auth.connectedAs" },
+                          { account: connectedAccountLabel },
+                        )
+                      : intl.formatMessage({ id: "settings.modelProvider.auth.connected" })}
+                  </span>
                 </span>
-              </span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => void logout()}>
-                {intl.formatMessage({ id: "settings.modelProvider.auth.logout" })}
-              </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => void logout()}>
+                  {intl.formatMessage({ id: "settings.modelProvider.auth.logout" })}
+                </Button>
+              </div>
+              {showXaiUsage ? (
+                <XaiSubscriptionUsageCard
+                  usage={xaiUsage}
+                  loading={xaiUsageLoading}
+                  onRetry={() => void refreshXaiUsage(true)}
+                />
+              ) : null}
             </div>
           ) : (
             <div className="flex items-center justify-between gap-2">

@@ -20,6 +20,11 @@ import pkg, { CancellationToken } from "electron-updater";
 import semver from "semver";
 import { logger } from "./logger.js";
 import { getElectronReleasePlatform, ManifestUpdateProvider } from "./manifestUpdateProvider.js";
+import {
+  resolveDesktopUpdateSourceFromRuntime,
+  resolveUpdateReleaseUrl,
+  type DesktopUpdateSource,
+} from "./updateSource.js";
 const { autoUpdater } = pkg;
 
 export const CHECK_FOR_UPDATE_MENU_ID = "check-for-update";
@@ -32,6 +37,7 @@ const DEV_AUTO_UPDATE_VERSION_ENV = "ZCODE_AUTO_UPDATE_DEV_VERSION";
 const DEV_AUTO_UPDATE_VERSION_SWITCH = "--zcode-auto-update-dev-version";
 let readyUpdateVersion: string | null = null;
 let readyUpdateReleaseNotes: PostUpdateReleaseNotesPayload | null = null;
+let readyUpdateReleaseUrl: string | null = null;
 let readyUpdateRestoredFromPendingReleaseNotes = false;
 let menuLocale: Locale = DEFAULT_LOCALE;
 let manualCheckWebContentsId: number | null = null;
@@ -44,9 +50,11 @@ let activeAutoUpdateCheckId: number | null = null;
 let activeAutoUpdateCheckChannel: ElectronReleaseChannel | null = null;
 let settlingAutoUpdateCheckId: number | null = null;
 let availableUpdateReleaseNotes: PostUpdateReleaseNotesPayload | null = null;
+let availableUpdateReleaseUrl: string | null = null;
 let availableUpdateChannel: ElectronReleaseChannel = "stable";
 let downloadingUpdateVersion: string | null = null;
 let downloadingUpdateReleaseNotes: PostUpdateReleaseNotesPayload | null = null;
+let downloadingUpdateReleaseUrl: string | null = null;
 let downloadingUpdateChannel: ElectronReleaseChannel | null = null;
 let downloadCancellationToken: CancellationToken | null = null;
 let readyUpdateChannel: ElectronReleaseChannel | null = null;
@@ -56,6 +64,9 @@ const acknowledgedPostUpdateReleaseNotesVersions = new Set<string>();
 const cancelledDownloadTokens = new WeakSet<CancellationToken>();
 let pendingCancelledDownloadErrorCount = 0;
 let autoUpdaterSettingService: SettingServiceLike | undefined;
+// 更新源在 initAutoUpdater 里解析一次，之后只被读取：provider 装配、release notes 与
+// 「查看发布页面」链接都按同一份来源解析，避免同一次更新提示里出现两个来源。
+let activeUpdateSource: DesktopUpdateSource = { kind: "service" };
 // initAutoUpdater({ enabled: false }) 只清轮询并 return，electron-updater 实例保持未配置
 // （占位 feed、autoDownload 默认值）。任何漏改成按身份判断的入口若仍调用手动检查，
 // 都会对占位 feed 发真实请求。这里记住“本 flavor 已禁用”，让手动检查在模块内部 fail-closed。
@@ -74,6 +85,8 @@ type UpdateDownloadedInfoLike = {
   files?: Array<{ url?: string | null } | null> | null;
   packages?: Record<string, { path?: string | null } | null> | null;
   zcodeReleaseChannel?: ElectronReleaseChannel | null;
+  /** GitHub provider 带回的 Release tag，用来拼「查看发布页面」地址。 */
+  tag?: string | null;
   releaseName?: string | null;
   releaseNotes?: string | ReleaseNoteInfoLike[] | null;
   releaseDate?: string | Date | null;
@@ -324,6 +337,7 @@ function buildUpdateDownloadedState(version: string): AutoUpdaterMenuState {
     version,
     ...(readyUpdateChannel ? { channel: readyUpdateChannel } : {}),
     ...(readyUpdateReleaseNotes ? { releaseNotes: readyUpdateReleaseNotes } : {}),
+    ...(readyUpdateReleaseUrl ? { releaseUrl: readyUpdateReleaseUrl } : {}),
   };
 }
 
@@ -338,6 +352,7 @@ function buildUpdateAvailableState(
     version,
     channel,
     ...(releaseNotes ? { releaseNotes } : {}),
+    ...(availableUpdateReleaseUrl ? { releaseUrl: availableUpdateReleaseUrl } : {}),
   };
 }
 
@@ -389,6 +404,7 @@ function buildDownloadProgressState(
     ...(downloadingUpdateVersion ? { version: downloadingUpdateVersion } : {}),
     ...(downloadingUpdateChannel ? { channel: downloadingUpdateChannel } : {}),
     ...(downloadingUpdateReleaseNotes ? { releaseNotes: downloadingUpdateReleaseNotes } : {}),
+    ...(downloadingUpdateReleaseUrl ? { releaseUrl: downloadingUpdateReleaseUrl } : {}),
   };
 }
 
@@ -400,12 +416,14 @@ async function quitAndInstallUpdate(rejectUnavailable = false) {
   ) {
     const restoredVersion = readyUpdateVersion;
     const restoredReleaseNotes = readyUpdateReleaseNotes;
+    const restoredReleaseUrl = readyUpdateReleaseUrl;
     const restoredChannel = readyUpdateChannel ?? availableUpdateChannel;
     logger.warn(
       `[auto-update] restage restored pending update before install version=${restoredVersion}`,
     );
     clearReadyUpdateState();
     availableUpdateReleaseNotes = restoredReleaseNotes;
+    availableUpdateReleaseUrl = restoredReleaseUrl;
     setAutoUpdaterMenuState(
       buildUpdateAvailableState(restoredVersion, restoredReleaseNotes, restoredChannel),
     );
@@ -523,6 +541,7 @@ function isSameAutoUpdaterMenuState(left: AutoUpdaterMenuState, right: AutoUpdat
         right.kind === left.kind &&
         right.version === left.version &&
         right.channel === left.channel &&
+        right.releaseUrl === left.releaseUrl &&
         JSON.stringify(right.releaseNotes ?? null) === JSON.stringify(left.releaseNotes ?? null)
       );
     case "update-downloaded":
@@ -530,6 +549,7 @@ function isSameAutoUpdaterMenuState(left: AutoUpdaterMenuState, right: AutoUpdat
         right.kind === left.kind &&
         right.version === left.version &&
         right.channel === left.channel &&
+        right.releaseUrl === left.releaseUrl &&
         JSON.stringify(right.releaseNotes ?? null) === JSON.stringify(left.releaseNotes ?? null)
       );
     case "download-progress":
@@ -538,6 +558,7 @@ function isSameAutoUpdaterMenuState(left: AutoUpdaterMenuState, right: AutoUpdat
         right.progress === left.progress &&
         right.version === left.version &&
         right.channel === left.channel &&
+        right.releaseUrl === left.releaseUrl &&
         JSON.stringify(right.releaseNotes ?? null) === JSON.stringify(left.releaseNotes ?? null)
       );
     case "idle":
@@ -751,8 +772,28 @@ async function syncAutoUpdateCheckChannelFromSettings(
   activeAutoUpdateCheckChannel = nextChannel;
 }
 
-function applyManifestUpdateProvider(options: InitAutoUpdaterOptions): void {
+function applyUpdateProvider(options: InitAutoUpdaterOptions): void {
   const manifestUrl = options.updateFeedSource?.url.trim();
+  // ZCODE_UPDATE_FEED_URL / --zcode-update-feed-url 只覆盖 service 源 manifest（未打包构建专用），
+  // 其余情况按 updateSource 解析结果装配 provider。
+  activeUpdateSource = manifestUrl ? { kind: "service" } : resolveDesktopUpdateSourceFromRuntime();
+
+  if (activeUpdateSource.kind === "github") {
+    // 分叉发行只发正式版：固定读 /releases/latest，不随「接收 preview 版本」设置变化。
+    // electron-updater 在当前版本带预发布后缀时会默认打开 allowPrerelease，此时 GitHubProvider
+    // 只匹配同名预发布 tag，正式版永远选不中，所以这里必须显式关掉。
+    autoUpdater.allowPrerelease = false;
+    autoUpdater.setFeedURL({
+      provider: "github",
+      owner: activeUpdateSource.owner,
+      repo: activeUpdateSource.repo,
+    });
+    logger.info(
+      `[auto-update] github release provider applied repo=${activeUpdateSource.owner}/${activeUpdateSource.repo} platform=${getElectronReleasePlatform()}`,
+    );
+    return;
+  }
+
   autoUpdater.setFeedURL({
     provider: "custom",
     updateProvider: ManifestUpdateProvider,
@@ -796,6 +837,12 @@ function normalizeReleaseDate(
   }
   const trimmed = releaseDate.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function buildUpdateReleaseUrlForInfo(info: UpdateDownloadedInfoLike): string | null {
+  return (
+    resolveUpdateReleaseUrl(activeUpdateSource, { tag: info.tag, version: info.version }) ?? null
+  );
 }
 
 function toPostUpdateReleaseNotesPayload(
@@ -918,17 +965,20 @@ function sendManualCheckResult(payload: UpdateCheckResultPayload) {
 
 function clearAvailableUpdateState() {
   availableUpdateReleaseNotes = null;
+  availableUpdateReleaseUrl = null;
 }
 
 function clearDownloadingUpdateState() {
   downloadingUpdateVersion = null;
   downloadingUpdateReleaseNotes = null;
+  downloadingUpdateReleaseUrl = null;
   downloadingUpdateChannel = null;
 }
 
 function clearReadyUpdateState() {
   readyUpdateVersion = null;
   readyUpdateReleaseNotes = null;
+  readyUpdateReleaseUrl = null;
   readyUpdateChannel = null;
   readyUpdateRestoredFromPendingReleaseNotes = false;
 }
@@ -991,12 +1041,14 @@ function handleAutoUpdateFailure(error: unknown, source: string) {
       ? {
           version: downloadingUpdateVersion ?? menuState.version,
           releaseNotes: downloadingUpdateReleaseNotes ?? menuState.releaseNotes ?? null,
+          releaseUrl: downloadingUpdateReleaseUrl ?? menuState.releaseUrl ?? null,
           channel: downloadingUpdateChannel ?? menuState.channel ?? availableUpdateChannel,
         }
       : downloadCancellationToken && downloadingUpdateVersion
         ? {
             version: downloadingUpdateVersion,
             releaseNotes: downloadingUpdateReleaseNotes ?? null,
+            releaseUrl: downloadingUpdateReleaseUrl ?? null,
             channel: downloadingUpdateChannel ?? availableUpdateChannel,
           }
         : null;
@@ -1034,6 +1086,7 @@ function handleAutoUpdateFailure(error: unknown, source: string) {
     // 清空 available/downloading 并广播 idle 会让 renderer 入口和弹窗同时消失。
     // 失败并不等同于用户跳过该版本，应退回“发现更新”状态，让用户能看到并重试下载。
     availableUpdateReleaseNotes = failedDownload.releaseNotes;
+    availableUpdateReleaseUrl = failedDownload.releaseUrl;
     availableUpdateChannel = failedDownload.channel;
     setAutoUpdaterMenuState(
       buildUpdateAvailableState(
@@ -1210,6 +1263,7 @@ function downloadAvailableUpdate(reason = "renderer") {
 
   downloadingUpdateVersion = menuState.version;
   downloadingUpdateReleaseNotes = menuState.releaseNotes ?? availableUpdateReleaseNotes;
+  downloadingUpdateReleaseUrl = menuState.releaseUrl ?? availableUpdateReleaseUrl;
   downloadingUpdateChannel = menuState.channel ?? availableUpdateChannel;
   // electron-updater 如果命中本地已下载缓存，会在 downloadUpdate() 内直接触发
   // update-downloaded。这里不能先广播 0% 下载态，否则用户会先看到“下载中”，
@@ -1254,6 +1308,7 @@ function cancelDownloadingUpdate(reason = "renderer") {
 
   const version = downloadingUpdateVersion;
   const releaseNotes = downloadingUpdateReleaseNotes;
+  const releaseUrl = downloadingUpdateReleaseUrl;
   const channel = downloadingUpdateChannel ?? availableUpdateChannel;
   const cancellationToken = downloadCancellationToken;
   markCancelledDownload(cancellationToken);
@@ -1266,6 +1321,7 @@ function cancelDownloadingUpdate(reason = "renderer") {
   clearDownloadingUpdateState();
   if (version) {
     availableUpdateReleaseNotes = releaseNotes;
+    availableUpdateReleaseUrl = releaseUrl;
     availableUpdateChannel = channel;
     setAutoUpdaterMenuState(buildUpdateAvailableState(version, releaseNotes, channel));
     return;
@@ -1323,6 +1379,8 @@ export async function hydratePendingPostUpdateReleaseNotes(settingService: Setti
     // 避免已有缓存时仍提示“下载更新”，点击后又被 dev staging 错误打回 idle。
     readyUpdateVersion = pendingPostUpdateReleaseNotes.version;
     readyUpdateReleaseNotes = pendingPostUpdateReleaseNotes;
+    // pending 说明里不持久化发布页地址；重启后恢复的 ready 不展示「查看发布页面」。
+    readyUpdateReleaseUrl = null;
     readyUpdateRestoredFromPendingReleaseNotes = true;
     setAutoUpdaterMenuState(buildUpdateDownloadedState(readyUpdateVersion));
     logger.info(
@@ -1504,7 +1562,7 @@ export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Pro
   // 这里仅在 Windows 关闭“退出即自动安装”，要求用户显式点更新；其他平台保持原有行为，避免改动既有升级链路。
   autoUpdater.autoInstallOnAppQuit = process.platform !== "win32";
   autoUpdater.logger = logger;
-  applyManifestUpdateProvider(options);
+  applyUpdateProvider(options);
 
   const triggerCheckForUpdates = (reason: string) => {
     if (checkForUpdatesInFlight) {
@@ -1583,6 +1641,7 @@ export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Pro
       }
 
       availableUpdateReleaseNotes = toPostUpdateReleaseNotesPayload(info);
+      availableUpdateReleaseUrl = buildUpdateReleaseUrlForInfo(info);
       if (readyUpdateRestoredFromPendingReleaseNotes) {
         // pendingPostUpdateReleaseNotes 只能证明“曾经下载完成并持久化了版本说明”，
         // 不能恢复当前进程里的 electron-updater downloadedUpdateHelper、Squirrel.Mac proxy server
@@ -1681,6 +1740,7 @@ export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Pro
     readyUpdateChannel = downloadingUpdateChannel ?? availableUpdateChannel;
     readyUpdateReleaseNotes =
       toPostUpdateReleaseNotesPayload(info) ?? downloadingUpdateReleaseNotes;
+    readyUpdateReleaseUrl = buildUpdateReleaseUrlForInfo(info) ?? downloadingUpdateReleaseUrl;
     clearAvailableUpdateState();
     clearDownloadingUpdateState();
     logger.info(

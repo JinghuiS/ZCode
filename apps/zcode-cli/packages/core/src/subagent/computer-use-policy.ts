@@ -1,5 +1,6 @@
 import { relative, isAbsolute } from "node:path";
 import {
+  isOfficialCuaMcpNamespaceName,
   ZCODE_CUA_OFFICIAL_MCP_NAMESPACE_NAME as ZCODE_CUA_OFFICIAL_MCP_SERVER_NAME,
   ZCODE_CUA_OFFICIAL_PLUGIN_ID,
 } from "@zcode/shared";
@@ -37,7 +38,7 @@ export function createOfficialCuaPolicy(
     if (!officialServerNames.has(descriptor.serverName)) continue;
     officialDescriptorCount += 1;
     toolNames.add(toMcpToolName(descriptor));
-    if (descriptor.serverName === ZCODE_CUA_OFFICIAL_MCP_SERVER_NAME) {
+    if (isOfficialCuaMcpNamespaceName(descriptor.serverName)) {
       const suffix = toModelVisibleMcpNamePart(descriptor.toolName);
       toolNames.add(`${OFFICIAL_CUA_CANONICAL_PREFIX}${suffix}`);
       toolNames.add(`${OFFICIAL_CUA_ALIAS_PREFIX}${suffix}`);
@@ -48,15 +49,16 @@ export function createOfficialCuaPolicy(
   for (const serverName of officialServerNames) {
     officialToolPrefixes.add(`mcp__${toModelVisibleMcpNamePart(serverName)}__`);
   }
-  if (officialServerNames.has(ZCODE_CUA_OFFICIAL_MCP_SERVER_NAME)) {
+  if ([...officialServerNames].some(isOfficialCuaMcpNamespaceName)) {
     officialToolPrefixes.add(OFFICIAL_CUA_CANONICAL_PREFIX);
     officialToolPrefixes.add(OFFICIAL_CUA_ALIAS_PREFIX);
   }
 
   const officialServerSelectorParts = new Set<string>();
   for (const serverName of officialServerNames) {
-    if (serverName === ZCODE_CUA_OFFICIAL_MCP_SERVER_NAME) {
+    if (isOfficialCuaMcpNamespaceName(serverName)) {
       for (const part of OFFICIAL_CUA_SERVER_PARTS) officialServerSelectorParts.add(part);
+      officialServerSelectorParts.add(toModelVisibleMcpNamePart(serverName));
       continue;
     }
     officialServerSelectorParts.add(toModelVisibleMcpNamePart(serverName));

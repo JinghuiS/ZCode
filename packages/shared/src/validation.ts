@@ -736,6 +736,14 @@ export const hostCuaOperationStateResponseSchema = z
     turnId: nonEmptyStringSchema,
     workspacePath: nonEmptyStringSchema,
     workspaceIdentity: nonEmptyStringSchema.optional(),
+    computerUseTarget: z
+      .object({
+        pid: z.number().int().positive().optional(),
+        app: z.string().trim().min(1).max(256).optional(),
+        windowId: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

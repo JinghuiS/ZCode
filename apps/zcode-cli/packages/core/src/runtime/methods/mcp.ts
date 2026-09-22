@@ -1,5 +1,6 @@
 import {
   getCapturedZCodeCuaBrokerCredentials,
+  KIMI_COMPUTER_USE_MCP_NAMESPACE_NAME,
   ZCODE_CUA_OFFICIAL_PLUGIN_ID,
   ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY,
   ZCODE_PLUGIN_ID_ENV_KEY,
@@ -20,15 +21,19 @@ export function computeOfficialCuaServerNames(
 ): Set<string> {
   const expectedAuthority = getCapturedZCodeCuaBrokerCredentials().pluginAuthority;
   const names = new Set<string>();
-  if (!expectedAuthority) return names;
 
   for (const [name, config] of Object.entries(servers)) {
     if (!trustedServerNames.has(name)) continue;
     if (config.type !== "stdio") continue;
+    if (config.env?.[ZCODE_PLUGIN_ID_ENV_KEY]?.trim().toLowerCase() !== ZCODE_CUA_OFFICIAL_PLUGIN_ID) {
+      continue;
+    }
+    // KimiCU 没有 broker，也就没有 authority 随机数；它的来源由 bootstrap 的插件注册表
+    // 对象身份校验（resolveTrustedOfficialCuaServerNames）保证。旧 zcode-cua 仍要求 authority。
     if (
-      config.env?.[ZCODE_PLUGIN_ID_ENV_KEY]?.trim().toLowerCase() !==
-        ZCODE_CUA_OFFICIAL_PLUGIN_ID ||
-      config.env?.[ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]?.trim() !== expectedAuthority
+      name !== KIMI_COMPUTER_USE_MCP_NAMESPACE_NAME &&
+      (!expectedAuthority ||
+        config.env?.[ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]?.trim() !== expectedAuthority)
     ) {
       continue;
     }

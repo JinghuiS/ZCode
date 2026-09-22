@@ -264,6 +264,7 @@ export * from "./plugin-marketplaces.js";
 export * from "./lineChangeStat.js";
 export * from "./process-names.js";
 export * from "./mcp.js";
+export * from "./computer-use-operation-tool.js";
 export * from "./runtime-tool-runtime.js";
 export * from "./git.js";
 export * from "./assistant-message-parts.js";

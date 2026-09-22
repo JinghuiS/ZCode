@@ -1,4 +1,8 @@
-import { resolveWorkspaceKey, type ZCodeComputerUseOperationEvent } from "@zcode/shared";
+import {
+  resolveWorkspaceKey,
+  type ComputerUseTarget,
+  type ZCodeComputerUseOperationEvent,
+} from "@zcode/shared";
 import type { PipSessionEvent } from "@zcode/zcode-cua/pip-session";
 
 export interface CuaOperationWorkspaceTarget {
@@ -12,6 +16,7 @@ export interface CuaOperationState {
   turnId: string;
   workspacePath: string;
   workspaceIdentity?: string;
+  computerUseTarget?: ComputerUseTarget;
 }
 
 export interface CuaOperationStateReporter {
@@ -48,6 +53,7 @@ function toReportedState(record: ActiveTurnRecord, active: boolean): CuaOperatio
     turnId: record.turnId,
     workspacePath: record.workspacePath,
     ...(record.workspaceIdentity ? { workspaceIdentity: record.workspaceIdentity } : {}),
+    ...(record.computerUseTarget ? { computerUseTarget: record.computerUseTarget } : {}),
   };
 }
 
@@ -73,7 +79,7 @@ export function createCuaOperationTurnTracker(options: {
    * "是否 CUA" 只能在排期时判定；但浮层要等真正开始执行才亮——排期与开始之间可能卡在
    * 权限审批上，那时还没有人在操作电脑。于是这里把排期时的事实存下来，交给 tool-started 兑现。
    */
-  const computerUseScheduledCalls = new Set<string>();
+  const computerUseScheduledCalls = new Map<string, ComputerUseTarget | undefined>();
   const activeTurns = new Map<string, ActiveTurnRecord>();
   const retiredTurnKeys = new Set<string>();
   const retiredTurnKeyOrder: string[] = [];
@@ -148,7 +154,7 @@ export function createCuaOperationTurnTracker(options: {
       report(record, false);
     }
     const toolPrefix = `${turnKey}\0`;
-    for (const key of computerUseScheduledCalls) {
+    for (const key of computerUseScheduledCalls.keys()) {
       if (key.startsWith(toolPrefix)) computerUseScheduledCalls.delete(key);
     }
     // 只有真的清掉了一个操作 turn 才可能归零；从未 active 过的 turn 不会触发边界。
@@ -160,7 +166,7 @@ export function createCuaOperationTurnTracker(options: {
       if (record.sessionKey === sessionKey) clearTurn(record.turnKey);
     }
     const sessionPrefix = `${sessionKey}\0`;
-    for (const key of computerUseScheduledCalls) {
+    for (const key of computerUseScheduledCalls.keys()) {
       if (key.startsWith(sessionPrefix)) computerUseScheduledCalls.delete(key);
     }
   }
@@ -258,17 +264,21 @@ export function createCuaOperationTurnTracker(options: {
     if (retiredTurnKeys.has(turnKey)) return;
     const toolKey = toolKeyFor(turnKey, toolCallId);
     if (event.kind === "tool-scheduled") {
-      if (event.computerUse) computerUseScheduledCalls.add(toolKey);
+      if (event.computerUse) {
+        computerUseScheduledCalls.set(toolKey, event.computerUseTarget);
+      }
       return;
     }
 
-    // 只认"这次 tool call 在用 Computer Use"这一个布尔事实，不解析动作名：
-    // 动作名要从模型源码里抽出来再拿动作词表比对，SDK 面一改就整条链失配。
-    // 判定在 bootstrap 侧一次做完（usesComputerUse）。
-    if (!computerUseScheduledCalls.delete(toolKey)) return;
+    // 只认"这次 tool call 在用 Computer Use"这一个布尔事实，不解析动作名。
+    // 判定在 bootstrap 侧一次做完（isComputerUseOperationToolCall）。
+    if (!computerUseScheduledCalls.has(toolKey)) return;
+    const scheduledTarget = computerUseScheduledCalls.get(toolKey);
+    computerUseScheduledCalls.delete(toolKey);
 
     const existingRecord = activeTurns.get(turnKey);
     if (existingRecord) {
+      if (scheduledTarget) existingRecord.computerUseTarget = scheduledTarget;
       // 同一 turn 内每个新 CUA cell 都要刷新桌面浮层的安全截止时间；Reporter 会在 Main 侧
       // 重置兜底计时器，但不会重复创建原生窗口。
       report(existingRecord, true, true);
@@ -284,6 +294,7 @@ export function createCuaOperationTurnTracker(options: {
       turnId,
       workspacePath: workspace.workspacePath,
       ...(workspace.workspaceIdentity ? { workspaceIdentity: workspace.workspaceIdentity } : {}),
+      ...(scheduledTarget ? { computerUseTarget: scheduledTarget } : {}),
     };
     activeTurns.set(turnKey, record);
     report(record, true);
@@ -301,7 +312,7 @@ export function createCuaOperationTurnTracker(options: {
     for (const key of lastSeqBySession.keys()) {
       if (key.startsWith(workspacePrefix)) lastSeqBySession.delete(key);
     }
-    for (const key of computerUseScheduledCalls) {
+    for (const key of computerUseScheduledCalls.keys()) {
       if (key.startsWith(workspacePrefix)) computerUseScheduledCalls.delete(key);
     }
     for (let index = retiredTurnKeyOrder.length - 1; index >= 0; index -= 1) {

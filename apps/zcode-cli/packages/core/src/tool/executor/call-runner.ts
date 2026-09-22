@@ -484,7 +484,8 @@ async function executeToolCallImpl(
     );
     const display = createToolResultDisplay(canonicalToolCall.name, output, {
       mcp: entry.metadata.mcpPresentation,
-      officialCua: entry.modelContentProtection === OFFICIAL_CUA_FRAME_MODEL_CONTENT_PROTECTION,
+      // 以宿主验证后的 official_cua 权限组为准：KimiCU 可信但不挂帧契约。
+      officialCua: entry.permissionCapabilityGroup === "official_cua",
     });
     const perf = mergeToolExecutionTelemetry(readToolExecutionTelemetry(output), {
       permissionWaitMs,

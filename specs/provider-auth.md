@@ -73,6 +73,43 @@ CLI runner（access.type = provider-oauth）
 - 刷新失败不清除凭据文件，避免网络抖动导致掉登录；只有 `invalid_grant` 才标记失效。
 - 登出：删除 `provider-auth:<id>`，provider access 保持 `provider-oauth`，状态变为未连接。
 
+## xAI SuperGrok 套餐用量
+
+只挂在 xAI 卡片的 SuperGrok 账号区，已连接才查询。不是全局额度中心，也不覆盖 API Key。
+
+公开 `api.x.ai` 没有剩余额度接口。套餐用量走 Grok CLI 消费端代理（与 Pi `@juanibiapina/pi-usage`、官方 CLI `/usage` 同源）：
+
+```text
+GET https://cli-chat-proxy.grok.com/v1/billing              → 月度 credits（used / monthlyLimit）
+GET https://cli-chat-proxy.grok.com/v1/billing?format=credits → 周池（creditUsagePercent）
+
+Authorization: Bearer <ProviderAuthEngine.resolveAccessToken("xai")>
+Accept: application/json
+x-xai-token-auth: xai-grok-cli
+```
+
+```text
+UI ─getSubscriptionUsage({ authProviderId: "xai" })──▶ ProviderAuthService
+                                                        非 xai → unsupported，不发网
+                                                        未连接 → unavailable，不发网
+                                                        已连接 → resolveAccessToken（复用刷新）
+                                                              → 上述两个 GET
+                                                              → 归一化快照（周/月窗口）
+UI ◀─{ status: ready | unavailable | unsupported }
+```
+
+| 项     | 约定                                                                                                                                      |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 范围   | `access.type === provider-oauth` 且 `authProviderId === "xai"` 且已连接                                                                   |
+| 非范围 | API Key、智谱、使用统计页、公开 `api.x.ai` 预付积分                                                                                       |
+| 所有者 | Host `ProviderAuthService`：token 仍归 engine；用量是内存快照，登出 / `provider-auth:changed` 即丢                                        |
+| Token  | 不经 RPC 下发；Renderer 只拿窗口百分比、重置时间、可选 used/limit                                                                         |
+| 展示   | 已连接块下方，样式对齐原 Z.ai Start Plan 余额卡：周/月各一块，大号**剩余**百分比、绿色剩余进度条、重置时间；月度若有绝对值再显示剩余/上限 |
+| 缓存   | Host 内存成功 TTL 5 分钟；失败 / 429 按 `Retry-After` 或 30s 退避；打开卡片拉一次，可手动刷新                                             |
+| 失败   | 网络、空窗口、非 401 → `unavailable`，文案「用量暂不可用」；401/403 同样 `unavailable`，**不登出**；掉登录只走现有 `invalid_grant`        |
+
+周池是 SuperGrok 主限额，有则先展示；月度有则并排第二块。进度条表达剩余（`100 - usedPercent`），与原 Z.ai 余额卡一致，不是已用占比。
+
 ## 暂不包含
 
 - 远程工作区（SSH/WSL）的凭据同步：远端 Host 暂不可用 xAI 账号方式，后续扩展 providerProvisioning。
@@ -88,6 +125,7 @@ CLI runner（access.type = provider-oauth）
 - xAI 卡片可在「账号 / API Key」间切换；账号方式完成设备码登录后能正常对话。
 - access token 过期后下一次请求自动刷新，多窗口并发请求只刷新一次。
 - 登出后请求返回可读错误，不崩溃。
+- SuperGrok 已连接时卡片显示周/月剩余进度条；API Key / 未连接不发用量请求；用量接口 401 不登出。
 
 ---
 

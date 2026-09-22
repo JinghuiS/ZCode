@@ -99,6 +99,12 @@ const REQUIRED_LOCAL_RUNTIME_ASSETS = [
               join(desktopRoot, "resources", "macos-window-bounds", "zcode-window-bounds"),
             ),
         },
+        {
+          label: "macOS computer use preview helper",
+          script: "prepare:macos-cua-preview",
+          isReady: () =>
+            existsSync(join(desktopRoot, "resources", "macos-cua-preview", "zcode-cua-preview")),
+        },
       ]
     : []),
 ];
