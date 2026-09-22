@@ -18,6 +18,8 @@ import type { TaskChatMessage as TestChatMessage } from "@/lib/taskChatMessageTy
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { getPathLeaf } from "@/lib/path.js";
+import { resolveTabWorkspaceDisplayLabel } from "@/lib/workspaceDisplayLabel.js";
+import { useWorkspaceDisplayAliases } from "@/hooks/useSettingService.js";
 import {
   addPluginStoreOpenListener,
   type PluginStoreOpenTarget,
@@ -362,6 +364,7 @@ export function App({
   const tabs = useTabStore((s) => s.tabs);
   const addTab = useTabStore((s) => s.addTab);
   const activateTabByPath = useTabStore((s) => s.activateTabByPath);
+  const workspaceDisplayAliases = useWorkspaceDisplayAliases();
 
   const {
     resolvedActiveTaskMeta,
@@ -384,7 +387,7 @@ export function App({
     () =>
       tabs.filter(isWorkspaceTab).map((tab) => ({
         workspacePath: tab.workspacePath,
-        label: tab.label,
+        label: resolveTabWorkspaceDisplayLabel(tab, workspaceDisplayAliases),
         remoteSessionId: tab.remoteSessionId,
         remoteTarget: tab.remoteTarget,
         workspaceIdentity: tab.workspaceIdentity,
@@ -392,9 +395,16 @@ export function App({
         localWorkspacePath: tab.localWorkspacePath,
         availability: tab.availability,
       })),
-    [tabs],
+    [tabs, workspaceDisplayAliases],
   );
-  const commandCenterWorkspaceTabs = useMemo(() => tabs.filter(isWorkspaceTab), [tabs]);
+  const commandCenterWorkspaceTabs = useMemo(
+    () =>
+      tabs.filter(isWorkspaceTab).map((tab) => ({
+        ...tab,
+        label: resolveTabWorkspaceDisplayLabel(tab, workspaceDisplayAliases),
+      })),
+    [tabs, workspaceDisplayAliases],
+  );
   const activeSidePaneTab = useMemo(() => getActiveSidePaneTab(sidePaneState), [sidePaneState]);
   const isBrowserOpen = activeSidePaneTab?.type === "browser";
   const isGitOpen = activeSidePaneTab?.type === "git";
@@ -586,7 +596,12 @@ export function App({
     },
     [handleOpenTreemapping, workspaceReadOnlyReason],
   );
-  const projectName = getPathLeaf(workspaceAbsPath);
+  const projectName =
+    workspaceTabs.find(
+      (tab) =>
+        tab.workspacePath === workspaceAbsPath &&
+        (tab.workspaceIdentity ?? undefined) === workspaceIdentity,
+    )?.label || getPathLeaf(workspaceAbsPath);
   const handleOpenTaskFind = useCallback(() => {
     // Cmd/Ctrl+F 语义是“查找对话”，之前误复用了 Cmd/Ctrl+P 的文件搜索入口，
     // 导致用户在 quick pick 里点 Find 或按快捷键时会跳到打开文件。这里拆成独立状态，避免影响文件搜索链路。

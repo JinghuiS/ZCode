@@ -114,6 +114,8 @@ import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { WorkspaceFileTree } from "@/WorkspaceFileTree.js";
 import { WorkspaceArchivedTasksFlatSection } from "@/WorkspaceArchivedTasksFlatSection.js";
 import { WorkspaceSidebarFooter } from "@/WorkspaceSidebarFooter.js";
+import { resolveTabWorkspaceDisplayLabel } from "@/lib/workspaceDisplayLabel.js";
+import { useWorkspaceDisplayAliases } from "@/hooks/useSettingService.js";
 import { WorkspacePinnedTasksSection } from "@/WorkspacePinnedTasksSection.js";
 import { WorkspaceTimelineTasksSection } from "@/WorkspaceTimelineTasksSection.js";
 import { WorkspaceGroupedTasksSection } from "@/WorkspaceGroupedTasksSection.js";
@@ -179,7 +181,9 @@ const EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY: Record<
 > = {};
 
 function WorkspaceDragOverlay({ tab, width }: { tab: WorkspaceTabState; width: number | null }) {
+  const workspaceDisplayAliases = useWorkspaceDisplayAliases();
   const isRemote = Boolean(tab.remoteSessionId || tab.remoteTarget || tab.workspaceIdentity);
+  const overlayLabel = resolveTabWorkspaceDisplayLabel(tab, workspaceDisplayAliases);
   return (
     <div
       data-testid="workspace-drag-overlay"
@@ -193,7 +197,7 @@ function WorkspaceDragOverlay({ tab, width }: { tab: WorkspaceTabState; width: n
       ) : (
         <Folder className="size-3.5 shrink-0 text-foreground-subtle" />
       )}
-      <span className="min-w-0 flex-1 truncate px-1">{tab.label}</span>
+      <span className="min-w-0 flex-1 truncate px-1">{overlayLabel}</span>
     </div>
   );
 }
@@ -351,6 +355,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const setTheme = useZCodeStore((state) => state.setTheme);
   const commandCenterShortcutLabel = useShortcutCommandLabel("openCommandCenter");
   const tabs = useTabStore((state) => state.tabs);
+  const workspaceDisplayAliases = useWorkspaceDisplayAliases();
   const activateTab = useTabStore((state) => state.activateTab);
   const closeTab = useTabStore((state) => state.closeTab);
   const openSettingsTab = useTabStore((state) => state.openSettingsTab);
@@ -360,7 +365,14 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const expandAllWorkspaceTabs = useTabStore((state) => state.expandAllWorkspaceTabs);
   const collapseAllWorkspaceTabs = useTabStore((state) => state.collapseAllWorkspaceTabs);
 
-  const workspaceTabs = useMemo(() => tabs.filter(isWorkspaceTab), [tabs]);
+  const workspaceTabs = useMemo(
+    () =>
+      tabs.filter(isWorkspaceTab).map((tab) => ({
+        ...tab,
+        label: resolveTabWorkspaceDisplayLabel(tab, workspaceDisplayAliases),
+      })),
+    [tabs, workspaceDisplayAliases],
+  );
   const { conversationWorkspaceTabs, projectWorkspaceTabs } = useMemo(
     () => partitionWorkspaceTabsByPurpose(workspaceTabs),
     [workspaceTabs],

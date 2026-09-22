@@ -26,7 +26,7 @@ import { toast } from "@/components/ui/toast.js";
 import { DesktopWindowFrame } from "@/DesktopWindowFrame.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
-import { getPathLeaf } from "@/lib/path.js";
+import { resolveTabWorkspaceDisplayLabel } from "@/lib/workspaceDisplayLabel.js";
 import {
   addPendingSettingsSectionListener,
   clearPendingSettingsPluginOrigin,
@@ -71,7 +71,7 @@ import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { cn } from "@/components/lib/utils.js";
 import { useSelectDirectory } from "@/hooks/usePlatform.js";
 import { ServiceProvider, useServices } from "@/hooks/useServices.js";
-import { useSettings } from "@/hooks/useSettingService.js";
+import { useSettings, useWorkspaceDisplayAliases } from "@/hooks/useSettingService.js";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
 import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { resolveModelProviderConnectivityWorkspacePath } from "@/lib/modelProviderConnectivityTarget.js";
@@ -288,20 +288,24 @@ export function SettingsPage({
   const onboardingRecordService = services.onboardingRecordService;
   const localHostServices = useBaseWorkspaceServices();
   const { settings: sharedSettings, update: updateSharedSettings } = useSettings();
+  const workspaceDisplayAliases = useWorkspaceDisplayAliases();
   const memoryWorkspaceDisplayNames = useMemo(() => {
     const names = new Set<string>();
     // Memory Scope 的项目顺序以 settings.json recentProjects 为准；打开中的
     // Workspace 只补充尚未持久化的项目，不能抢占最近项目排序。
     for (const path of sharedSettings?.recentProjects ?? []) {
-      const name = getPathLeaf(path).trim();
+      const name = resolveTabWorkspaceDisplayLabel(
+        { workspacePath: path },
+        workspaceDisplayAliases,
+      ).trim();
       if (name) names.add(name);
     }
     for (const tab of workspaceTabs) {
-      const name = tab.label.trim() || getPathLeaf(tab.workspacePath).trim();
+      const name = resolveTabWorkspaceDisplayLabel(tab, workspaceDisplayAliases).trim();
       if (name) names.add(name);
     }
     return [...names];
-  }, [sharedSettings?.recentProjects, workspaceTabs]);
+  }, [sharedSettings?.recentProjects, workspaceDisplayAliases, workspaceTabs]);
   const memoryEnabled = sharedSettings?.memoryEnabled === true;
   const nativeSearchEnhancementsEnabled = sharedSettings?.nativeSearchEnhancementsEnabled !== false;
   const askUserQuestionAutoResolutionEnabled =

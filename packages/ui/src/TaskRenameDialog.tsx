@@ -17,6 +17,8 @@ export function TaskRenameDialog({
   value,
   inputRef,
   intl,
+  titleId = "taskList.rename",
+  placeholderId = "taskList.renamePlaceholder",
   onOpenChange,
   onChange,
   onCancel,
@@ -28,6 +30,8 @@ export function TaskRenameDialog({
   intl: {
     formatMessage: (desc: { id: string }, values?: Record<string, string>) => string;
   };
+  titleId?: string;
+  placeholderId?: string;
   onOpenChange: (open: boolean) => void;
   onChange: (value: string) => void;
   onCancel: () => void;
@@ -40,14 +44,14 @@ export function TaskRenameDialog({
       <DialogContent className="max-w-xl overflow-hidden rounded-2xl p-0">
         <div className="flex min-w-0 flex-col gap-6 p-6">
           <DialogHeader className="space-y-2">
-            <DialogTitle>{intl.formatMessage({ id: "taskList.rename" })}</DialogTitle>
+            <DialogTitle>{intl.formatMessage({ id: titleId })}</DialogTitle>
           </DialogHeader>
           <div className="flex min-w-0 flex-col space-y-4">
             <Input
               ref={inputRef}
               value={value}
               size="lg"
-              placeholder={intl.formatMessage({ id: "taskList.renamePlaceholder" })}
+              placeholder={intl.formatMessage({ id: placeholderId })}
               onChange={(event) => {
                 onChange(event.target.value);
               }}

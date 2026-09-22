@@ -148,7 +148,9 @@ function filterVisibleWorkspaceMenuTabs({
         return true;
       }
 
-      const workspaceTitle = getWorkspaceListTitle(workspaceTab.workspacePath, homeWorkspaceLabel);
+      const workspaceTitle =
+        workspaceTab.label.trim() ||
+        getWorkspaceListTitle(workspaceTab.workspacePath, homeWorkspaceLabel);
       const searchableText = [
         workspaceTitle,
         workspaceTab.label,
@@ -255,7 +257,8 @@ export function ChatEmptyWorkspacePreviewMenu({
   );
   const currentWorkspaceTitle = isConversationWorkspace
     ? intl.formatMessage({ id: "chat.empty.selectProject" })
-    : getWorkspaceTriggerTitle(workspacePath, homeWorkspaceLabel);
+    : currentWorkspaceTab?.label.trim() ||
+      getWorkspaceTriggerTitle(workspacePath, homeWorkspaceLabel);
   const CurrentWorkspaceIcon = isCurrentRemoteWorkspace
     ? Cloud
     : homeWorkspacePath === workspacePath
@@ -345,10 +348,9 @@ export function ChatEmptyWorkspacePreviewMenu({
         </div>
         <div className="p-1">
           {visibleWorkspaceTabs.map((workspaceTab, index) => {
-            const workspaceTitle = getWorkspaceListTitle(
-              workspaceTab.workspacePath,
-              homeWorkspaceLabel,
-            );
+            const workspaceTitle =
+              workspaceTab.label.trim() ||
+              getWorkspaceListTitle(workspaceTab.workspacePath, homeWorkspaceLabel);
             const isRemoteWorkspace = hasRemoteWorkspaceIdentity(workspaceTab);
             const WorkspaceIcon = isRemoteWorkspace
               ? Cloud

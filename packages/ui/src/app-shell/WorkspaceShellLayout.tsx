@@ -1509,7 +1509,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
 
   return (
     <DesktopWindowFrame
-      title={`ZCode / ${getPathLeaf(workspaceAbsPath)}`}
+      title={`ZCode / ${projectName}`}
       showHeader
       isDesktop={isDesktop}
       isMacDesktop={isMacDesktop}

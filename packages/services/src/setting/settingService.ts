@@ -11,6 +11,7 @@ import {
   appSettingsSchema,
   formatLogPrefix,
   formatZodError,
+  mergeWorkspaceDisplayAliasPatch,
 } from "@zcode/shared";
 import type { ISettingService } from "./setting.js";
 import { normalizeSettingsPatch } from "#src/setting/normalizeSettingsPatch.js";
@@ -314,6 +315,15 @@ export function createSettingServiceWithMigrations(): {
         const merged = appSettingsSchema.parse({
           ...current,
           ...validatedPatch,
+          ...(Object.hasOwn(validatedPatch, "workspaceDisplayAliases")
+            ? {
+                // 显示别名按 workspace key 合并。整表覆盖会让两个窗口同时改不同项目时互相冲掉。
+                workspaceDisplayAliases: mergeWorkspaceDisplayAliasPatch(
+                  current.workspaceDisplayAliases,
+                  validatedPatch.workspaceDisplayAliases,
+                ),
+              }
+            : {}),
         });
 
         // 打开工作区后会几乎同时写 recentProjects 和 lastWorkspaceSession。

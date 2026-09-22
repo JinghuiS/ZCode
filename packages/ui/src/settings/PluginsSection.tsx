@@ -30,6 +30,8 @@ import {
   useWorkspaceServicesResolution,
 } from "@/hooks/useWorkspaceServices.js";
 import { getPathLeaf } from "@/lib/path.js";
+import { resolveTabWorkspaceDisplayLabel } from "@/lib/workspaceDisplayLabel.js";
+import { useWorkspaceDisplayAliases } from "@/hooks/useSettingService.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { McpSettingsSection } from "@/settings/McpSettingsSection.js";
 import { SkillsSection } from "@/settings/SkillsSection.js";
@@ -961,6 +963,7 @@ export function PluginsSection({
 }: PluginsSectionProps) {
   const { intl } = useZCodeIntl();
   const tabs = useTabStore((state) => state.tabs);
+  const workspaceDisplayAliases = useWorkspaceDisplayAliases();
   const storeActiveWorkspacePath = useTabStore((state) => state.activeWorkspacePath);
   const storeActiveWorkspaceIdentity = useTabStore((state) => state.activeWorkspaceIdentity);
   const activeWorkspacePath = workspacePath ?? storeActiveWorkspacePath;
@@ -990,11 +993,24 @@ export function PluginsSection({
         kind: "workspace",
         workspacePath: activeWorkspacePath,
         workspaceIdentity: activeWorkspaceIdentity ?? undefined,
-        label: getPathLeaf(activeWorkspacePath) || activeWorkspacePath,
+        label:
+          resolveTabWorkspaceDisplayLabel(
+            {
+              workspacePath: activeWorkspacePath,
+              workspaceIdentity: activeWorkspaceIdentity ?? undefined,
+              label: getPathLeaf(activeWorkspacePath) || activeWorkspacePath,
+            },
+            workspaceDisplayAliases,
+          ) ||
+          getPathLeaf(activeWorkspacePath) ||
+          activeWorkspacePath,
       });
     }
-    return scopedTabs;
-  }, [activeWorkspaceIdentity, activeWorkspacePath, tabs]);
+    return scopedTabs.map((tab) => ({
+      ...tab,
+      label: resolveTabWorkspaceDisplayLabel(tab, workspaceDisplayAliases),
+    }));
+  }, [activeWorkspaceIdentity, activeWorkspacePath, tabs, workspaceDisplayAliases]);
   const preferredHost = useMemo(
     () =>
       workspaceTabs.find(

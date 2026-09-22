@@ -31,6 +31,10 @@ const appSettingsOccupationSchema = z.enum([
 export const appSettingsOccupationEnum = appSettingsOccupationSchema;
 
 const nonEmptyStringSchema = z.string().trim().min(1);
+const workspaceDisplayAliasValueSchema = z.string().trim().min(1).max(80);
+const workspaceDisplayAliasesSchema = z
+  .record(z.string().trim().min(1), workspaceDisplayAliasValueSchema)
+  .default({});
 
 export const localeSchema = z.enum(["zh-CN", "en-US"]);
 const localePreferenceSchema = z.enum(["system", "zh-CN", "en-US"]);
@@ -419,6 +423,7 @@ function migrateLegacyWorkspaceSession(value: unknown): unknown {
 
 const appSettingsObjectSchema = z.object({
   recentProjects: z.array(z.string()).default([]),
+  workspaceDisplayAliases: workspaceDisplayAliasesSchema,
   locale: localeSchema.default("zh-CN"),
   // 快捷键用户覆盖（语义校验在 ui/src/shortcuts 生效表阶段容错，schema 只管形状）
   shortcutBindings: z.record(z.string(), z.array(z.string())).optional(),
@@ -492,6 +497,7 @@ export const appSettingsSchema = z.preprocess(
 
 export const appSettingsPatchSchema = z.object({
   recentProjects: z.array(z.string()).optional(),
+  workspaceDisplayAliases: z.record(z.string().trim().min(1), z.string().trim().max(80)).optional(),
   locale: localeSchema.optional(),
   shortcutBindings: z.record(z.string(), z.array(z.string())).optional(),
   localePreference: localePreferenceSchema.optional(),

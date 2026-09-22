@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { APP_RUNTIME_PREFERENCES_CHANGED_BROADCAST_CHANNEL, type AppSettings } from "@zcode/shared";
 import type { ISettingService } from "@zcode/services";
 import { useServices } from "./useServices.js";
+import { useOptionalBaseWorkspaceServices } from "./useWorkspaceServices.js";
 import { usePlatform } from "./usePlatform.js";
 
 type SettingsSnapshot = {
@@ -104,9 +105,8 @@ async function refreshSettingsStore(settingService: ISettingService | undefined)
   return store.inflightRefresh;
 }
 
-/** 获取和更新应用设置 */
-export function useSettings() {
-  const { broadcastService, settingService, zcodeAgentService } = useServices();
+function useSettingsFromService(settingService: ISettingService | undefined) {
+  const { broadcastService, zcodeAgentService } = useServices();
   const platform = usePlatform();
   const settingsStore = getSettingsStore(settingService);
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>(settingsStore.snapshot);
@@ -139,6 +139,9 @@ export function useSettings() {
 
   const update = useCallback(
     async (patch: Partial<AppSettings>) => {
+      if (!settingService) {
+        throw new Error("Setting service is unavailable");
+      }
       await settingService.update(patch);
       platform.syncAppSettings?.(patch);
       await refresh();
@@ -179,6 +182,24 @@ export function useSettings() {
     update,
     refresh,
   };
+}
+
+/** 获取和更新应用设置 */
+export function useSettings() {
+  const { settingService } = useServices();
+  return useSettingsFromService(settingService);
+}
+
+/** 本机 Host 上的应用设置。远端 workspace 的 ServiceProvider 不能作为别名写入目标。 */
+export function useLocalSettings() {
+  const baseServices = useOptionalBaseWorkspaceServices();
+  const { settingService: contextSettingService } = useServices();
+  return useSettingsFromService(baseServices?.settingService ?? contextSettingService);
+}
+
+export function useWorkspaceDisplayAliases(): Readonly<Record<string, string>> | undefined {
+  const { settings } = useLocalSettings();
+  return settings?.workspaceDisplayAliases;
 }
 
 /** 最近项目列表的便捷 hook */

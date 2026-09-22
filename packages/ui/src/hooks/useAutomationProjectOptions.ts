@@ -3,6 +3,8 @@ import type { WorkspacePurpose } from "@zcode/shared";
 import { useTabStore } from "@/store/TabStoreProvider.js";
 import { isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
 import { useLocalWorkspaceScopes } from "@/hooks/useLocalWorkspaceScopes.js";
+import { useWorkspaceDisplayAliases } from "@/hooks/useSettingService.js";
+import { resolveTabWorkspaceDisplayLabel } from "@/lib/workspaceDisplayLabel.js";
 
 interface AutomationProjectOption {
   workspacePath: string;
@@ -21,6 +23,7 @@ interface AutomationProjectOptionsConfig {
 function resolveAutomationProjectOptions(
   workspaceTabs: WorkspaceTabState[],
   config: AutomationProjectOptionsConfig = {},
+  aliases?: Readonly<Record<string, string>> | null,
 ): AutomationProjectOption[] {
   const result: AutomationProjectOption[] = [];
   let conversationWorkspaceIncluded = false;
@@ -46,7 +49,7 @@ function resolveAutomationProjectOptions(
 
     result.push({
       workspacePath: tab.workspacePath,
-      label: tab.label || workspaceBasename(tab.workspacePath),
+      label: resolveTabWorkspaceDisplayLabel(tab, aliases) || workspaceBasename(tab.workspacePath),
     });
   }
 
@@ -68,13 +71,18 @@ export function useAutomationProjectOptions(
   const workspaceTabs = useMemo(() => tabs.filter(isWorkspaceTab), [tabs]);
   const localWorkspaceTabs = useLocalWorkspaceScopes({ workspaceTabs });
   const includeConversationWorkspace = config.includeConversationWorkspace === true;
+  const aliases = useWorkspaceDisplayAliases();
 
   return useMemo(
     () =>
-      resolveAutomationProjectOptions(localWorkspaceTabs, {
-        includeConversationWorkspace,
-      }),
-    [includeConversationWorkspace, localWorkspaceTabs],
+      resolveAutomationProjectOptions(
+        localWorkspaceTabs,
+        {
+          includeConversationWorkspace,
+        },
+        aliases,
+      ),
+    [aliases, includeConversationWorkspace, localWorkspaceTabs],
   );
 }
 

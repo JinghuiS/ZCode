@@ -1264,6 +1264,9 @@ const enUS: Record<string, string> = {
   "workspaceSidebar.searchTasksPlaceholder": "Search tasks...",
   "workspaceSidebar.searchArchivedTasksPlaceholder": "Search archived tasks...",
   "workspaceSidebar.closeTaskSearch": "Close task search",
+  "workspaceSidebar.rename": "Rename",
+  "workspaceSidebar.renamePlaceholder": "Project display name",
+  "workspaceSidebar.renameFailed": "Failed to rename project",
   "workspaceSidebar.remove": "Remove",
   "workspaceSidebar.removeRunningWorkspace.title": "Remove a running project?",
   "workspaceSidebar.removeRunningWorkspace.description":
@@ -6253,6 +6256,11 @@ const enUS: Record<string, string> = {
     "Desktop GUI automation by Moonshot AI (KimiCU.app on macOS, kimi-cu.exe on Windows). Install it separately.",
   "settings.computerUse.kimi.checking": "Checking…",
   "settings.computerUse.kimi.unsupported": "Not supported on this system",
+  "settings.computerUse.kimi.unsupportedMacosVersion": "Requires macOS 14 or later",
+  "settings.computerUse.kimi.archMismatch": "Wrong architecture",
+  "settings.computerUse.kimi.reinstall": "Reinstall",
+  "settings.computerUse.kimi.archMismatchHint":
+    "The installed KimiCU was built for a different chip (for example the Apple silicon build on an Intel Mac) and cannot start. Reinstall to get the build that matches this Mac.",
   "settings.computerUse.kimi.notInstalled": "Not installed",
   "settings.computerUse.kimi.installed": "Installed {version}",
   "settings.computerUse.kimi.installedNoVersion": "Installed",

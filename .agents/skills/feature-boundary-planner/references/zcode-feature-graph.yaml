@@ -222,8 +222,7 @@ nodes:
       - file: packages/services/src/session/taskIndexRepo.ts
         symbol: workspaceKey
     invariants:
-      - Use workspaceIdentity?.trim() || workspacePath for isolation; workspacePath remains the execution
-        and display path.
+      - Use workspaceIdentity?.trim() || workspacePath for isolation; workspacePath remains the execution path. Display names may be overridden by AppSettings.workspaceDisplayAliases keyed by that isolation key; aliases are not identity.
   - id: persistence.task-index
     kind: persistence
     label: Task sqlite index

@@ -1,4 +1,5 @@
 import { resolveWorkspaceKey, type RemoteTarget, type WorkspacePurpose } from "@zcode/shared";
+import { resolveTabWorkspaceDisplayLabel } from "@/lib/workspaceDisplayLabel.js";
 import { isWorkspaceTab, isWorkspaceTabReadOnly, type WindowTabState } from "@/store/tabStore.js";
 
 export interface AutomationWorkspaceOption {
@@ -56,6 +57,7 @@ function workspaceLabelFromPath(path: string): string {
  */
 export function buildAutomationWorkspaceOptions(
   tabs: readonly WindowTabState[],
+  aliases?: Readonly<Record<string, string>> | null,
 ): AutomationWorkspaceOption[] {
   const byKey = new Map<string, AutomationWorkspaceOption>();
   for (const tab of tabs) {
@@ -76,7 +78,8 @@ export function buildAutomationWorkspaceOptions(
       ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
       ...(tab.remoteSessionId ? { remoteSessionId: tab.remoteSessionId } : {}),
       ...(tab.remoteTarget ? { remoteTarget: tab.remoteTarget } : {}),
-      label: tab.label || workspaceLabelFromPath(tab.workspacePath),
+      label:
+        resolveTabWorkspaceDisplayLabel(tab, aliases) || workspaceLabelFromPath(tab.workspacePath),
     });
   }
   return [...byKey.values()];

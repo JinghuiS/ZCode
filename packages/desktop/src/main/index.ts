@@ -983,6 +983,16 @@ function syncImmediateAppSettings(patch: Partial<AppSettings>) {
     );
   }
 
+  if (patch.workspaceDisplayAliases !== undefined) {
+    // 显示别名按本机 setting.json 持久化；其他窗口必须刷新设置快照，
+    // 否则侧栏/窗口标题会继续显示旧名字。
+    for (const win of getApplicationWindowsExcludingCuaIndicator()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send(PlatformChannels.SettingsChanged);
+      }
+    }
+  }
+
   if (patch.shortcutBindings !== undefined) {
     // 快捷键改绑：
     // 落盘已完成（useSettings.update 先 await settingService.update 再走本通道），

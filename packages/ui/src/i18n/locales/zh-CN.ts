@@ -1177,6 +1177,9 @@ const zhCN: Record<string, string> = {
   "workspaceSidebar.searchTasksPlaceholder": "搜索任务...",
   "workspaceSidebar.searchArchivedTasksPlaceholder": "搜索归档任务...",
   "workspaceSidebar.closeTaskSearch": "关闭任务搜索",
+  "workspaceSidebar.rename": "重命名",
+  "workspaceSidebar.renamePlaceholder": "项目显示名称",
+  "workspaceSidebar.renameFailed": "重命名项目失败",
   "workspaceSidebar.remove": "移除",
   "workspaceSidebar.removeRunningWorkspace.title": "移除运行中的项目？",
   "workspaceSidebar.removeRunningWorkspace.description":
@@ -5989,6 +5992,11 @@ const zhCN: Record<string, string> = {
     "由 Moonshot AI 提供的桌面界面操作程序（macOS 为 KimiCU.app，Windows 为 kimi-cu.exe），需单独安装。",
   "settings.computerUse.kimi.checking": "检测中…",
   "settings.computerUse.kimi.unsupported": "当前系统不支持",
+  "settings.computerUse.kimi.unsupportedMacosVersion": "需要 macOS 14 或更高版本",
+  "settings.computerUse.kimi.archMismatch": "架构不匹配",
+  "settings.computerUse.kimi.reinstall": "重新安装",
+  "settings.computerUse.kimi.archMismatchHint":
+    "已安装的 KimiCU 不是本机芯片架构的版本（例如 Intel Mac 装了 Apple 芯片版），无法启动。点击重新安装会自动改装匹配本机的版本。",
   "settings.computerUse.kimi.notInstalled": "未安装",
   "settings.computerUse.kimi.installed": "已安装 {version}",
   "settings.computerUse.kimi.installedNoVersion": "已安装",
