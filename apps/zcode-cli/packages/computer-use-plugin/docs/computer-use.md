@@ -8,10 +8,11 @@ Agent 读取任意 app 的界面结构和截图，完成点击、输入、滚动
 1. 打开「设置 → 电脑控制」，开启「启用电脑控制」。
 2. 若显示「未安装」，点击「安装」，会打开一个终端窗口运行官方安装脚本。也可以手动运行：
 
-   - macOS（安装到「应用程序」，可能需要管理员密码）：
+   - macOS（安装到「应用程序」，可能需要管理员密码；官方脚本固定下载 Apple 芯片版，
+     下面的命令会在 Intel Mac 上改下 Intel 版，需要 macOS 14 及以上）：
 
      ```bash
-     curl -fsSL https://cdn.kimi.com/kimi-computer-use/latest/setup_macos.sh | bash
+     curl -fsSL https://cdn.kimi.com/kimi-computer-use/latest/setup_macos.sh | { if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then cat; else sed 's#\$VERSION/KimiCU\.app\.zip#$VERSION/KimiCU-x86_64.app.zip#'; fi; } | bash
      ```
 
    - Windows（PowerShell，按用户安装到 `%LOCALAPPDATA%\KimiCU`，脚本会校验签名）：

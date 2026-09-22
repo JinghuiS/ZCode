@@ -8,7 +8,15 @@ if [ "$(uname -s)" != "Darwin" ]; then
   exit 1
 fi
 
-curl -fsSL https://cdn.kimi.com/kimi-computer-use/latest/setup_macos.sh | bash
+# 官方脚本固定下载 Apple 芯片（arm64）版 KimiCU.app.zip；Intel Mac 上只把下载地址换成 CDN 上
+# Moonshot 签名并公证的 KimiCU-x86_64.app.zip，其余步骤沿用官方脚本。
+if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+  curl -fsSL https://cdn.kimi.com/kimi-computer-use/latest/setup_macos.sh | bash
+else
+  curl -fsSL https://cdn.kimi.com/kimi-computer-use/latest/setup_macos.sh \
+    | sed 's#\$VERSION/KimiCU\.app\.zip#$VERSION/KimiCU-x86_64.app.zip#' \
+    | bash
+fi
 
 echo
 echo "安装完成。请在「系统设置 → 隐私与安全性」中为 KimiCU 打开「辅助功能」和「屏幕录制」，"

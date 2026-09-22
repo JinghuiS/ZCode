@@ -8,8 +8,11 @@ export interface KimiComputerUsePermissions {
 
 export type KimiComputerUsePlatform = "macos" | "windows";
 
+/** platform：非 macOS / Windows；macos-version：KimiCU 要求 macOS 14 及以上。 */
+export type KimiComputerUseUnsupportedReason = "platform" | "macos-version";
+
 export type KimiComputerUseStatus =
-  | { supported: false }
+  | { supported: false; reason: KimiComputerUseUnsupportedReason }
   | { supported: true; platform: KimiComputerUsePlatform; installed: false }
   | {
       supported: true;
@@ -21,6 +24,11 @@ export type KimiComputerUseStatus =
        * Windows：没有系统级授权项，恒为 null。
        */
       permissions: KimiComputerUsePermissions | null;
+      /**
+       * macOS：已安装的 kimi-cu 不含本机 CPU 架构（例如 Intel Mac 装了 arm64 版），
+       * 无法启动，需要重新安装对应架构的版本。
+       */
+      archMismatch?: boolean;
     };
 
 /**

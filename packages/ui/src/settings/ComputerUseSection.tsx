@@ -239,13 +239,24 @@ export function ComputerUseSection({
     if (!kimiStatus.supported) {
       return {
         tone: "muted",
-        text: intl.formatMessage({ id: "settings.computerUse.kimi.unsupported" }),
+        text: intl.formatMessage({
+          id:
+            kimiStatus.reason === "macos-version"
+              ? "settings.computerUse.kimi.unsupportedMacosVersion"
+              : "settings.computerUse.kimi.unsupported",
+        }),
       };
     }
     if (!kimiStatus.installed) {
       return {
         tone: "red",
         text: intl.formatMessage({ id: "settings.computerUse.kimi.notInstalled" }),
+      };
+    }
+    if (kimiStatus.archMismatch) {
+      return {
+        tone: "red",
+        text: intl.formatMessage({ id: "settings.computerUse.kimi.archMismatch" }),
       };
     }
     return {
@@ -295,7 +306,11 @@ export function ComputerUseSection({
       </div>
     );
 
-  const kimiInstalled = Boolean(kimiStatus?.supported && kimiStatus.installed);
+  // 架构不符（如 Intel Mac 装了 arm64 版）等同于不可用：隐藏授权项，只给「重新安装」。
+  const kimiArchMismatch = Boolean(
+    kimiStatus?.supported && kimiStatus.installed && kimiStatus.archMismatch,
+  );
+  const kimiInstalled = Boolean(kimiStatus?.supported && kimiStatus.installed) && !kimiArchMismatch;
   // 只有 macOS 需要系统级授权（辅助功能 / 屏幕录制）；Windows 版无授权项。
   const isKimiMacOs = kimiStatus?.supported === true && kimiStatus.platform === "macos";
   const isKimiWindows = kimiStatus?.supported === true && kimiStatus.platform === "windows";
@@ -371,7 +386,16 @@ export function ComputerUseSection({
             </div>
           }
           detail={
-            kimiStatus?.supported && !kimiStatus.installed ? (
+            kimiArchMismatch ? (
+              <div className="flex flex-col items-start gap-1">
+                <Button type="button" size="sm" onClick={() => void onInstall()}>
+                  {intl.formatMessage({ id: "settings.computerUse.kimi.reinstall" })}
+                </Button>
+                <span className="text-ui-sm text-foreground-subtlest">
+                  {intl.formatMessage({ id: "settings.computerUse.kimi.archMismatchHint" })}
+                </span>
+              </div>
+            ) : kimiStatus?.supported && !kimiStatus.installed ? (
               <div className="flex flex-col items-start gap-1">
                 <Button type="button" size="sm" onClick={() => void onInstall()}>
                   {intl.formatMessage({ id: "settings.computerUse.kimi.install" })}

@@ -1,19 +1,24 @@
 ---
 name: computer-use
-description: |
-  在 macOS 或 Windows 上操作本机桌面应用（电脑控制）。当用户要求打开/查看某个 app、读取界面内容或截图、
-  点击按钮、在输入框中输入、滚动、拖拽、整理文件管理器里的内容，或任何需要代替用户在图形界面上动手的任务时使用。
-  工具由 kimi-cu MCP server 提供；macOS 上操作在后台完成，不移动用户鼠标、不切换前台窗口。
+description: "Use when a task needs a native desktop app's own UI or the OS. For anything inside a web page, use Browser Use. Main agent only."
 ---
 
 # 电脑控制（Kimi Computer Use）
 
-工具来自 `kimi-cu` MCP server。参数细节以各工具的 schema 为准，这里只说明工作方式与约束。
+读取或操作用户电脑上原生 app 的界面。工具来自 `kimi-cu` MCP server，参数细节以各工具的 schema 为准。
+
+- 专用连接器、API、CLI 或技能能完成任务时，优先用它们。
+- 网页和浏览器内的任务改用 Browser Use。
+- 用户没有明确要求时，不用 AppleScript、`osascript`、JXA、System Events、shell 命令
+  或其他 UI 自动化手段去操作界面（用 shell 启动 app 不在此列）。
+- 仅主会话使用，不委派给子代理。
 
 ## 基本循环
 
-1. **找应用**：`list_apps` 列出正在运行的 app。目标没在运行时，先请用户打开，或用 shell 启动
-   （macOS：`open -a "<App>"`；Windows：`Start-Process "<程序>"`）。
+1. **找应用**：`list_apps` 列出正在运行的 app。目标没在运行时直接用 shell 启动，不要先问用户
+   （macOS：`open -a "<App>"`；Windows：`Start-Process "<程序>"`），启动后再 `list_apps`；启动失败才请用户打开。
+   用户说的 app 名逐字照抄，不翻译、不改写、不去后缀：「网易云音乐app」不是「网易云音乐」，
+   「日历」不是「Calendar」，改写后的名字会匹配到别的 app 或找不到。匹配不到时调用一次 `list_apps` 再选。
    之后对该 app 的每次调用都传 `list_apps` 返回的 `pid`（而不只是 `app` 名）：
    ZCode 据此把操作的窗口实时投到对话旁的预览窗里，用户可以看到你在做什么。
 2. **看界面**：`get_app_state` 获取目标窗口的无障碍树和截图。
@@ -23,6 +28,12 @@ description: |
 3. **动手**：执行一个或一小组操作。
 4. **复查**：界面变化后旧的 `index` 和坐标全部失效，重新 `get_app_state` 确认结果，再决定下一步。
    不要在没有复查的情况下声称操作成功。
+
+坚持到请求真正完成：工具接受了动作不等于 app 执行了，往网页内容编辑区打字可能被接受却没有任何变化。
+复查后界面没变或只到中间状态，就换一种办法再试。只有请求的结果在界面上可见，
+或遇到说得清、自己解决不了的阻碍时，才回复用户。
+
+权限被拒、用户叫停或出现不可重试的错误时立即停止，不要改用其他 UI 自动化手段继续。
 
 目标元素不在可视区域时，先 `scroll` 再重新获取界面。观察界面一律使用 `get_app_state`，
 不要改用 shell 截图命令，否则坐标与 MCP 快照不一致。
@@ -61,9 +72,12 @@ ls /Applications/KimiCU.app/Contents/MacOS/kimi-cu                 # 是否已�
 /Applications/KimiCU.app/Contents/MacOS/kimi-cu xpc-ping           # 权限，正常应为 accessibility=true screenRecording=true
 ```
 
-- **未安装**：告诉用户到「设置 → 电脑控制」点击安装；用户同意后也可以代为运行
-  `curl -fsSL https://cdn.kimi.com/kimi-computer-use/latest/setup_macos.sh | bash`
-  （`/Applications` 不可写时需要管理员密码，此时请用户自己在终端运行）。
+- **未安装**：告诉用户到「设置 → 电脑控制」点击安装；用户同意后也可以代为运行下面的命令
+  （官方脚本固定下载 Apple 芯片版，命令会在 Intel Mac 上改下 Intel 版；
+  `/Applications` 不可写时需要管理员密码，此时请用户自己在终端运行）：
+  `curl -fsSL https://cdn.kimi.com/kimi-computer-use/latest/setup_macos.sh | { if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then cat; else sed 's#\$VERSION/KimiCU\.app\.zip#$VERSION/KimiCU-x86_64.app.zip#'; fi; } | bash`
+- **架构不匹配**（`file /Applications/KimiCU.app/Contents/MacOS/kimi-cu` 的架构与 `uname -m` 不同，
+  例如 Intel Mac 装了 arm64 版，启动报 `Bad CPU type`）：按上一条重新安装即可。
 - **服务未运行**：运行 `/Applications/KimiCU.app/Contents/MacOS/kimi-cu install`。
 - **权限为 false、截图全黑或无障碍树为空**：运行
   `/Applications/KimiCU.app/Contents/MacOS/kimi-cu request-permissions --ax --screen`，

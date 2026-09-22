@@ -10,8 +10,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
-const MACOS_INSTALL_COMMAND =
-  "curl -fsSL https://cdn.kimi.com/kimi-computer-use/latest/setup_macos.sh | bash";
+// 官方脚本固定下载 arm64 包；Intel Mac 改下 CDN 上的 KimiCU-x86_64.app.zip（与 Host 侧安装命令一致）。
+const MACOS_INSTALL_COMMAND = [
+  "curl -fsSL https://cdn.kimi.com/kimi-computer-use/latest/setup_macos.sh",
+  `{ if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then cat; else sed 's#\\$VERSION/KimiCU\\.app\\.zip#$VERSION/KimiCU-x86_64.app.zip#'; fi; }`,
+  "bash",
+].join(" | ");
+/** macOS 上执行不含本机架构的 Mach-O 时 spawn 报 EBADARCH（errno -86）。 */
+const EBADARCH = -86;
 const WINDOWS_INSTALL_COMMAND =
   "powershell -NoProfile -ExecutionPolicy Bypass -Command \"& ([scriptblock]::Create((irm 'https://cdn.kimi.com/kimi-computer-use-windows/latest/setup_windows.ps1')))\"";
 
@@ -106,7 +112,28 @@ export async function main() {
     return;
   }
 
-  const child = spawn(executable, ["mcp"], { stdio: "inherit", windowsHide: true });
+  // 先确认可执行文件能启动：架构不符（如 Intel Mac 装了 arm64 版）时 spawn 会同步抛出
+  // EBADARCH（不走 error 事件），其他失败走 error 事件。两种情况下 stdio 都尚未交给子进程，
+  // 可以改为挂空 MCP 给出重装指引。
+  let child;
+  let spawnError;
+  try {
+    child = spawn(executable, ["mcp"], { stdio: "inherit", windowsHide: true });
+    spawnError = await new Promise((resolve) => {
+      child.once("spawn", () => resolve(undefined));
+      child.once("error", resolve);
+    });
+  } catch (error) {
+    spawnError = error;
+  }
+  if (spawnError) {
+    const message =
+      spawnError.errno === EBADARCH
+        ? `已安装的 KimiCU 与本机芯片架构不匹配，无法启动。请在 ZCode「设置 → 电脑控制」中点击重新安装，或在终端运行：\n  ${MACOS_INSTALL_COMMAND}\n`
+        : `无法启动 Kimi Computer Use：${spawnError.message}\n`;
+    await serveUnavailable(message);
+    return;
+  }
   // Agent 关闭 MCP 连接时会结束宿主进程；把终止信号转给 kimi-cu，避免残留子进程。
   const forward = (signal) => {
     if (!child.killed) child.kill(signal);
@@ -115,10 +142,6 @@ export async function main() {
   process.once("SIGINT", forward);
 
   const exitCode = await new Promise((resolve) => {
-    child.once("error", (error) => {
-      process.stderr.write(`无法启动 Kimi Computer Use：${error.message}\n`);
-      resolve(1);
-    });
     child.once("exit", (code, signal) => resolve(signal ? 1 : (code ?? 1)));
   });
   process.exitCode = exitCode;

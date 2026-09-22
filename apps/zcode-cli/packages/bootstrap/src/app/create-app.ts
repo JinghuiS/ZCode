@@ -73,6 +73,7 @@ import {
   collectDynamicWorkflowDisabledSkillPaths,
   DYNAMIC_WORKFLOW_GATED_COMMAND_NAMES,
 } from "./dynamic-workflow-gate.js";
+import { collectComputerUseUnavailableSkillPaths } from "./computer-use-skill-gate.js";
 import { createWorkspaceHookRuntimeSecurity } from "./workspace-hook-trust.js";
 import { createScriptWorkflowBridge } from "./script-workflow-methods.js";
 import {
@@ -755,6 +756,10 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
                 ...(runtimeConfig.dynamicWorkflowEnabled === false
                   ? collectDynamicWorkflowDisabledSkillPaths(pluginOutcome.skillRoots)
                   : []),
+                // KimiCU 未安装时电脑控制插件只挂无工具的空 MCP，技能照常列出会诱导模型去调不存在的工具。
+                ...collectComputerUseUnavailableSkillPaths(pluginOutcome.skillRoots, {
+                  env: options.env ?? process.env,
+                }),
               ],
             }))
           : undefined,

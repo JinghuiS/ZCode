@@ -12,13 +12,19 @@
   校验运行时 SHA-256 与 Authenticode 签名；执行操作时会短暂占用键盘鼠标，无系统级授权项。
 - KimiCU 为闭源（Proprietary）程序，ZCode 不分发二进制，只调用官方安装脚本由用户在可见的终端窗口安装：
   macOS `setup_macos.sh`，Windows `setup_windows.ps1`（均在 `cdn.kimi.com`）。
+- 官方 `setup_macos.sh` 固定下载 arm64 单架构的 `KimiCU.app.zip`。CDN 另有 Moonshot Developer ID 签名、
+  已公证的 `KimiCU-x86_64.app.zip`（同版本）。安装命令用 `sysctl -n hw.optional.arm64` 判断芯片，
+  Intel Mac 上只把脚本里的 `$VERSION/KimiCU.app.zip` 换成 `$VERSION/KimiCU-x86_64.app.zip`，其余步骤沿用官方脚本。
+- KimiCU 的 `LSMinimumSystemVersion` 为 14.0：低于 macOS 14（Darwin 23）时状态为 `supported: false, reason: "macos-version"`。
+- 已安装但 `kimi-cu` 不含本机架构（读 Mach-O 头判断，不依赖 lipo）时状态带 `archMismatch: true`，
+  设置页显示「架构不匹配」与「重新安装」；插件启动器遇到 EBADARCH（spawn 同步抛出 errno -86）时挂空 MCP 并提示重装。
 
 ## 目标
 
 1. 用 Kimi Computer Use 替换官方「电脑控制」插件的内容，保留原有插件身份（`computer-use@zcode-plugins-official`）、
    设置入口与启用开关，同事安装 ZCode 后开启插件即可使用。
 2. KimiCU 未安装时，设置页提供「安装」入口（打开系统终端执行官方安装脚本），并展示授权状态。
-3. 模型侧只新增一组标准 MCP 工具与一个使用技能，不改 Agent 核心逻辑。
+3. 模型侧只新增一组标准 MCP 工具与一个使用技能，不改 Agent 核心逻辑。技能写法见下方「模型侧技能」。
 
 ## 暂不包含
 
@@ -27,6 +33,40 @@
 - 用 Kimi 的 `get_app_state` JPEG 驱动预览窗（那是给模型的观察，与预览并行）。
 - 把预览帧写入对话或模型上下文。
 - 远端 Workspace：电脑控制只作用于运行 Host 的本机。
+
+## 模型侧技能（对齐闭源 3.14.1 的调用积极性）
+
+闭源 3.14.1 没有额外的系统提示去鼓励模型使用电脑控制：Desktop Context 不含工具路由规则，
+`node_repl` 的工具描述与 MCP `instructions` 只写使用约束。它的调用积极性来自两处，开源版逐项对齐：
+
+1. **技能 `description` 与闭源逐字一致**（128 字符）：
+   `Use when a task needs a native desktop app's own UI or the OS. For anything inside a web page, use Browser Use. Main agent only.`
+   按**任务**匹配，不要求用户点名「电脑控制」。不追加 KimiCU 实现细节：技能列表把
+   `description`（与 `when_to_use` 拼接后）截断到 250 字符（`core/src/context/sections/skills.ts`），
+   实现细节放正文「平台差异」。
+2. **技能正文的执行姿态**，按 KimiCU 工具改写闭源正文里的这几条：
+   - 开头给出取舍：专用连接器 / API / CLI / 技能能完成就优先用它们；网页走 Browser Use；
+     用户未明确要求时不用 AppleScript、`osascript`、JXA、System Events 或 shell 做界面自动化；仅主会话。
+   - 目标 app 未运行时直接用 shell 启动（`open -a` / `Start-Process`），启动失败才请用户打开。
+   - 用户给出的 app 名逐字照抄，不翻译、不改写、不去后缀；匹配不到时调用一次 `list_apps` 再选。
+   - 坚持到结果在界面上可见为止：动作被接受不等于完成，没生效就换办法；只有请求的状态可见，
+     或遇到说得清的阻碍时才回复用户。
+   - 权限被拒或出现不可重试的错误时立即停止，不换用其他 UI 自动化手段。
+
+### 不可用时不列出技能
+
+闭源把 Helper 随包分发，技能出现时工具必然可用；开源版的 KimiCU 需要用户自行安装。
+技能越积极，未安装的用户越常遇到「加载技能 → 工具列表为空 → 跑排障命令 / 提议安装」。
+
+- **所有者**：Agent bootstrap（`bootstrap/src/app/computer-use-skill-gate.ts`），在装配 `NodeSkillAdapter` 时
+  判断一次（每个会话一次，与启动器「新开对话重新探测」的语义一致）。
+- **规则**：插件 id 精确等于 `computer-use@zcode-plugins-official` 的技能根下的 `computer-use/SKILL.md`，
+  在找不到 KimiCU 可执行文件时（含 Linux 等不支持的平台）加入 `disabledPaths`，与动态工作流灰度关闭时剔除技能的机制相同。
+  第三方同名插件不受影响。
+- **只看是否安装**：可执行文件探测与启动器 `resolveKimiComputerUseExecutable` 一致，只做同步 `existsSync`。
+  权限（`xpc-ping` 最长 8 秒）与架构不匹配不在会话启动时判断：这两种情况技能保留，由正文的排障章节引导修复。
+- **取舍**：未安装时模型看不到安装指引（MCP `instructions` 也不会注入模型上下文），用户明确要求操作电脑时
+  模型只能说明当前没有这项能力；安装入口由设置页「电脑控制」提供。
 
 ## 电脑控制预览窗（对齐闭源 Auto-PiP 的产品语义）
 
@@ -205,5 +245,7 @@ stateDiagram-v2
 ## 验收
 
 - 未安装 KimiCU：设置页显示「未安装」与安装按钮，点击后系统终端开始执行官方安装脚本。
-- 已安装且已授权：开启插件后新对话可调用 `list_apps` 等工具，模型能按技能完成「打开某 app 并读取界面」。
+- 已安装且已授权：开启插件后新对话可调用 `list_apps` 等工具；技能按任务匹配（需要原生桌面 UI / OS 即选用，不要求用户点名电脑控制），模型能完成「打开某 app 并读取界面」。网页任务仍走 Browser Use。
+- 技能列表中电脑控制技能的描述与闭源一致且不超过 250 字符，不被截断。
+- 未安装 KimiCU（或 Linux）：新对话的技能列表不含电脑控制技能；安装后新开对话即出现。
 - 未开启插件时不注册 kimi-cu MCP，不启动任何 KimiCU 进程。
