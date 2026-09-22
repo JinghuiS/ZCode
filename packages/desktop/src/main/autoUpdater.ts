@@ -25,7 +25,12 @@ import {
   resolveUpdateReleaseUrl,
   type DesktopUpdateSource,
 } from "./updateSource.js";
-const { autoUpdater } = pkg;
+import { MacSelfInstallUpdater } from "./macSelfInstallUpdater.js";
+
+// 打包后的 mac 包可能只有 ad-hoc 签名，Squirrel.Mac 无法校验通过；改用自替换安装的 updater，
+// 它在检测到 Developer ID 正式签名时会自动回落到原生 Squirrel 流程。开发态没有可替换的 .app，保持原样。
+const autoUpdater =
+  process.platform === "darwin" && app.isPackaged ? new MacSelfInstallUpdater() : pkg.autoUpdater;
 
 export const CHECK_FOR_UPDATE_MENU_ID = "check-for-update";
 const AUTO_UPDATE_POLL_INTERVAL_MS = 60 * 60 * 1000;
