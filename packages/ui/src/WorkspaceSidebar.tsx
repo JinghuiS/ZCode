@@ -1640,6 +1640,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
             onLocaleChange={handleLocaleChange}
             onThemeChange={handleThemeChange}
             onSettingsButtonClick={openSettingsTab}
+            workspacePath={workspacePath}
+            workspaceIdentity={workspaceIdentity}
             isDesktop={isDesktop}
           />
         </div>

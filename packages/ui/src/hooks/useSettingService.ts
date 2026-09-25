@@ -106,7 +106,7 @@ async function refreshSettingsStore(settingService: ISettingService | undefined)
 }
 
 function useSettingsFromService(settingService: ISettingService | undefined) {
-  const { broadcastService, zcodeAgentService } = useServices();
+  const { botsService, broadcastService, zcodeAgentService } = useServices();
   const platform = usePlatform();
   const settingsStore = getSettingsStore(settingService);
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>(settingsStore.snapshot);
@@ -159,6 +159,7 @@ function useSettingsFromService(settingService: ISettingService | undefined) {
         };
         const syncResults = await Promise.allSettled([
           zcodeAgentService.syncAppRuntimePreferences(preferences),
+          botsService.syncAppRuntimePreferences(preferences),
         ]);
         const syncError = syncResults.find(
           (result): result is PromiseRejectedResult => result.status === "rejected",
@@ -172,7 +173,15 @@ function useSettingsFromService(settingService: ISettingService | undefined) {
         }
       }
     },
-    [broadcastService, settingService, settingsStore, zcodeAgentService, platform, refresh],
+    [
+      botsService,
+      broadcastService,
+      settingService,
+      settingsStore,
+      zcodeAgentService,
+      platform,
+      refresh,
+    ],
   );
 
   return {
