@@ -950,6 +950,13 @@ function markForceQuit(reason: string) {
 
   forceQuitRef.current = true;
   logger.info(`[app-quit] forceQuit enabled (${reason})`);
+  // 下载中 / 待安装时更新窗口被锁成 setClosable(false)。Electron 关闭不可关闭的窗口会走
+  // WindowCloseCancelled，把整个 app.quit() 取消掉：主窗口确实关了，进程却留在后台，
+  // 安装器一直等不到退出，用户看到的就是“关掉再打开还是旧版本”。
+  // close 策略只在更新状态变化时同步，forceQuit 之后必须立刻补一次解锁。
+  if (updateStatusWindow) {
+    syncUpdateStatusWindowClosePolicy(updateStatusWindow);
+  }
 }
 
 function markExplicitQuit(reason: string) {
@@ -1983,6 +1990,9 @@ app.whenReady().then(async () => {
         await prepareWindowsProcessesForUpdateInstall();
       }
     },
+    // 退出准备已经完成，此时 app.quit() 被窗口吞掉只会让安装器空等。
+    // 普通退出路径同样不依赖 app.quit() 自己收尾，最终都由 exitPreparedApp 落地。
+    onForceExitAfterInstall: () => exitPreparedApp("auto-update install quit stalled"),
     settingService: mainSettingService,
     locale: currentApplicationLocale,
     deviceMid,

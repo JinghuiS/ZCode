@@ -65,6 +65,7 @@ let downloadCancellationToken: CancellationToken | null = null;
 let readyUpdateChannel: ElectronReleaseChannel | null = null;
 let pendingManifestReleaseChannelRefresh: ElectronReleaseChannel | null = null;
 let onBeforeQuitAndInstall: (() => void | Promise<void>) | undefined;
+let onForceExitAfterInstall: (() => void) | undefined;
 const acknowledgedPostUpdateReleaseNotesVersions = new Set<string>();
 const cancelledDownloadTokens = new WeakSet<CancellationToken>();
 let pendingCancelledDownloadErrorCount = 0;
@@ -129,6 +130,8 @@ let forceAutoUpdateLastLoggedProgressBucket: number | null = null;
 interface InitAutoUpdaterOptions {
   enabled?: boolean;
   onBeforeQuitAndInstall?: () => void | Promise<void>;
+  /** quitAndInstall 之后进程仍未退出时的硬退出兜底，见 scheduleForceExitAfterInstall。 */
+  onForceExitAfterInstall?: () => void;
   settingService?: SettingServiceLike;
   locale?: Locale;
   updateFeedSource?: RuntimeUpdateFeedSource;
@@ -137,6 +140,9 @@ interface InitAutoUpdaterOptions {
 }
 
 let quitAndInstallInFlight = false;
+// 退出准备（host/agent 回收、资源解锁）在调用安装器之前就已完成，
+// 这里只是等 Electron 自己走完退出流程，超时即认为退出被吞掉。
+const FORCE_EXIT_AFTER_INSTALL_DELAY_MS = 5_000;
 let devAutoUpdateVersionOverride: string | null = null;
 
 type MutableAutoUpdaterForDev = typeof autoUpdater & {
@@ -413,6 +419,21 @@ function buildDownloadProgressState(
   };
 }
 
+function scheduleForceExitAfterInstall(): void {
+  if (!onForceExitAfterInstall) {
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    logger.warn(
+      `[auto-update] app still running ${FORCE_EXIT_AFTER_INSTALL_DELAY_MS}ms after quitAndInstall, forcing exit`,
+    );
+    onForceExitAfterInstall?.();
+  }, FORCE_EXIT_AFTER_INSTALL_DELAY_MS);
+  // 正常退出时进程会带着这个定时器一起消失，不需要它把事件循环拖住。
+  timer.unref?.();
+}
+
 async function quitAndInstallUpdate(rejectUnavailable = false) {
   if (
     menuState.kind === "update-downloaded" &&
@@ -487,6 +508,11 @@ async function quitAndInstallUpdate(rejectUnavailable = false) {
       return;
     }
 
+    // 安装器只有在本进程真正退出后才会接管：mac 自替换脚本等 PID 退出，
+    // Windows 安装器等安装目录解锁。而 quitAndInstall 内部只是 app.quit()，
+    // 任何一个不可关闭的窗口都会把这次退出取消掉，且不再有任何事件通知主进程，
+    // 表现成“界面关了、进程还在、重开仍是旧版本”。这里留一道硬退出兜底。
+    scheduleForceExitAfterInstall();
     // 3.3.0 的 Windows 自定义 PowerShell delayed launcher 在 detached/hidden
     // 模式下可能只创建 powershell.exe，却没有稳定执行到安装器启动，用户看到应用关闭但版本不变。
     // 这里恢复 electron-updater 原生安装入口，避免把“launcher 进程创建成功”误当成更新已接管。
@@ -1536,6 +1562,7 @@ export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Pro
   if (!canUseAutoUpdaterInCurrentRuntime()) return;
 
   onBeforeQuitAndInstall = options.onBeforeQuitAndInstall;
+  onForceExitAfterInstall = options.onForceExitAfterInstall;
   if (options.locale) {
     menuLocale = options.locale;
   }
