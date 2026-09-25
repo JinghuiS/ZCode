@@ -26,7 +26,11 @@ git merge upstream/main
 # 按下面的「分叉清单」解冲突
 git checkout --ours pnpm-lock.yaml && pnpm install   # lock 的自动合并结果不可信，必须重新生成
 pnpm typecheck && pnpm lint && pnpm architecture:check --changed
-node --import tsx --test $(git ls-files '*.test.ts' | grep -v node_modules)
+# 测试用 node:test，没有统一 script。必须在各包目录下跑，
+# 否则 tsx 读不到该包 tsconfig 的 `@/` 路径别名。
+for p in apps/zcode-cli/packages/bootstrap packages/desktop packages/provider-node packages/services packages/ui; do
+  (cd "$p" && node --import tsx --test test/*.test.ts)
+done
 # 验证通过后合回 main（用 --no-ff 保留同步点）
 ```
 
