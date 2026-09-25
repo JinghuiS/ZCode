@@ -34,6 +34,7 @@
 - `apps/zcode-cli`：Agent CLI 与运行时。
 - `CONTEXT.md`：插件商店领域词汇；修改相关 UI 前阅读。
 - `DESIGN.md`：UI 设计规范；修改 UI 前阅读。
+- `DIVERGENCE.md`：与上游 fork 的分叉清单与同步流程；合并上游版本前阅读。
 
 ## 实现与验证
 
