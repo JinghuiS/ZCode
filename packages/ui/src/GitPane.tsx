@@ -1,11 +1,15 @@
 /* eslint-disable max-lines -- GitPane 当前集中承载来源切换、diff 懒加载、展开状态和文件变更查找联动；后续拆分需按 Git 面板功能边界单独推进。 */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { GitChangeSourceId, GitDiffResult } from "@zcode/shared";
 import { TID_GIT_PANE } from "@zcode/shared";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
-import { FileTextIcon, RefreshCw } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, FileTextIcon, RefreshCw } from "lucide-react";
+import { toast } from "@/components/ui/toast.js";
+import { GitActionMenu } from "@/GitActionMenu.js";
+import { GitGraphPane } from "@/git-graph/GitGraphPane.js";
+import { useGitCommitGraph } from "@/hooks/useGitCommitGraph.js";
 import {
   Select,
   SelectContent,
@@ -40,6 +44,46 @@ interface GitDiffLoadState {
 const GIT_PANE_CHANGE_ROW_ESTIMATE_PX = 32;
 const GIT_PANE_CHANGE_ROW_OVERSCAN = 14;
 
+function GitPaneSectionHeader({
+  label,
+  collapsed,
+  toggleLabel,
+  onToggle,
+  actions,
+}: {
+  label: string;
+  collapsed: boolean;
+  toggleLabel: string;
+  onToggle?: () => void;
+  /** 区块自己的操作，贴在标题行右侧；随区块一起出现或隐藏。 */
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="flex h-7 w-full shrink-0 items-center gap-1 px-3 text-ui-sm font-medium text-foreground-subtle">
+      {/* 标题是按钮、操作是兄弟节点：刷新这类控件不能嵌在按钮里。 */}
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        aria-label={toggleLabel}
+        disabled={!onToggle}
+        onClick={onToggle}
+        className={cn(
+          "flex h-full min-w-0 flex-1 items-center gap-1 text-left transition-colors",
+          onToggle && "hover:text-foreground",
+        )}
+      >
+        {collapsed ? (
+          <ChevronRightIcon className="size-3.5 shrink-0" />
+        ) : (
+          <ChevronDownIcon className="size-3.5 shrink-0" />
+        )}
+        <span className="truncate uppercase tracking-wide">{label}</span>
+      </button>
+      {actions}
+    </div>
+  );
+}
+
 export function GitPane({
   workspacePath,
   gitState,
@@ -55,6 +99,9 @@ export function GitPane({
   onRevealFileInTree,
   workspaceIdentity,
   workspaceRemoteSessionId,
+  changesCollapsed = false,
+  historyCollapsed = false,
+  onToggleSection,
 }: {
   workspacePath: string;
   workspaceIdentity?: string;
@@ -70,6 +117,9 @@ export function GitPane({
   onClose: () => void;
   onRefresh: () => void;
   onRevealFileInTree?: (path: string) => void;
+  changesCollapsed?: boolean;
+  historyCollapsed?: boolean;
+  onToggleSection?: (section: "changes" | "history", collapsed: boolean) => void;
 }) {
   const { gitService } = useServices();
   const { intl } = useZCodeIntl();
@@ -447,100 +497,213 @@ export function GitPane({
     [intl],
   );
 
+  // 历史区块折叠时不取数；展开会重新拉第一页，与 GitGraphDialog 各自分页互不影响。
+  const commitGraph = useGitCommitGraph({
+    workspacePath,
+    workspaceIdentity,
+    remoteSessionId: workspaceRemoteSessionId ?? null,
+    enabled: !historyCollapsed,
+    logScope: "GitPane",
+    onError: toast,
+  });
+
+  const changesSectionLabel = intl.formatMessage({ id: "git.panel.changes" });
+  const historySectionLabel = intl.formatMessage({ id: "git.panel.history" });
+  const historyRefreshing = commitGraph.refreshing || commitGraph.loading;
+  // 折叠态由 tab 拥有，不交给库的 collapse，避免两份折叠事实。
+  // 两个区块是手风琴：展开的那个占满剩余高度，所以这里没有拖拽分配，也没有高度比例记忆。
+
   return (
     <section data-testid={TID_GIT_PANE} className="flex h-full min-h-0 flex-col bg-background">
-      <div className="flex items-center justify-between gap-3 p-3">
-        <Select value={currentSourceOption.id} onValueChange={handleSelectSource}>
-          <SelectTrigger className="max-w-full" size="lg">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="start">
-            {gitState.sourceOptions.map((option) => (
-              <SelectItem key={option.id} value={option.id} disabled={option.disabled}>
-                {intl.formatMessage({ id: getSourceMessageId(option.id) })}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {changesCollapsed ? (
+        <GitPaneSectionHeader
+          label={changesSectionLabel}
+          collapsed
+          toggleLabel={intl.formatMessage(
+            { id: "git.panel.expandSection" },
+            { section: changesSectionLabel },
+          )}
+          onToggle={onToggleSection ? () => onToggleSection("changes", false) : undefined}
+        />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <GitPaneSectionHeader
+            label={changesSectionLabel}
+            collapsed={false}
+            toggleLabel={intl.formatMessage(
+              { id: "git.panel.collapseSection" },
+              { section: changesSectionLabel },
+            )}
+            onToggle={onToggleSection ? () => onToggleSection("changes", true) : undefined}
+          />
+          {/* 来源选择、刷新与提交都作用于变更本身，所以跟变更内容放在一起：
+              历史展开时这一行不占高度，图谱拿到整块面板。 */}
+          <div className="flex shrink-0 items-center justify-between gap-3 px-3 pb-2">
+            <Select value={currentSourceOption.id} onValueChange={handleSelectSource}>
+              <SelectTrigger className="max-w-full" size="lg">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start">
+                {gitState.sourceOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id} disabled={option.disabled}>
+                    {intl.formatMessage({ id: getSourceMessageId(option.id) })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="lg"
-            disabled={gitState.loading}
-            onClick={onRefresh}
-          >
-            <RefreshCw className={cn("size-3.5", gitState.loading && "animate-spin")} />
-            {intl.formatMessage({ id: "git.action.refresh" })}
-          </Button>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1">
-        {currentChanges.length > 0 ? (
-          <div ref={changeListScrollRef} className="h-full min-h-0 w-full overflow-auto">
-            <div
-              className="relative w-full min-w-0"
-              style={{ height: `${changeRowVirtualizer.getTotalSize()}px` }}
-            >
-              {virtualChangeRows.map((virtualRow) => {
-                const change = currentChanges[virtualRow.index];
-                if (!change) {
-                  return null;
-                }
-
-                const isExpanded = expandedPath === change.path;
-                const diffCacheKey = getDiffCacheKey(currentDataset.id, change.path);
-                const cachedDiffState = diffStateByKey[diffCacheKey];
-                const diffState = change.diff ?? cachedDiffState?.diff ?? null;
-                const isDiffLoading =
-                  isExpanded && !change.diff && (!cachedDiffState || cachedDiffState.loading);
-
-                return (
-                  <div
-                    key={virtualRow.key}
-                    ref={changeRowVirtualizer.measureElement}
-                    className="absolute left-0 w-full min-w-0"
-                    data-git-pane-change-virtual-row
-                    data-index={virtualRow.index}
-                    // transform 定位会让行内 sticky 文件名失效，展开大 diff 后标题不再置顶。
-                    // 改用 top 偏移保留虚拟滚动布局，同时让 sticky 继续以滚动容器为参照。
-                    style={{ top: `${virtualRow.start}px` }}
-                  >
-                    <GitPaneChangeCard
-                      change={change}
-                      contextMenuLabels={contextMenuLabels}
-                      diffState={diffState}
-                      isDiffLoading={isDiffLoading}
-                      isExpanded={isExpanded}
-                      canRevealInFileManager={fileActions.canRevealInFileManager({
-                        path: resolveChangePath(change),
-                        deleted: change.kind === "deleted",
-                      })}
-                      codePreviewSettings={codePreviewSettings}
-                      resolvedTheme={resolvedTheme}
-                      onCopyAbsolutePath={handleCopyAbsolutePath}
-                      onCopyRelativePath={handleCopyRelativePath}
-                      onOpenChange={handleExpandChange}
-                      onRevealInFileManager={handleRevealChangeInFileManager}
-                      onRevealInFileTree={
-                        onRevealFileInTree ? handleRevealChangeInFileTree : undefined
-                      }
-                    />
-                  </div>
-                );
-              })}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="lg"
+                disabled={gitState.loading}
+                onClick={onRefresh}
+              >
+                <RefreshCw className={cn("size-3.5", gitState.loading && "animate-spin")} />
+                {intl.formatMessage({ id: "git.action.refresh" })}
+              </Button>
+              {/* 提交入口过去只在会话状态面板里，打开 Git 面板反而提交不了。
+                  这里复用同一个 GitActionMenu，不另建提交对话框。 */}
+              <GitActionMenu
+                workspacePath={workspacePath}
+                workspaceIdentity={workspaceIdentity}
+                gitSummary={gitState.summary}
+                onRefreshGit={onRefresh}
+                triggerLayout="header"
+              />
             </div>
           </div>
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-            <FileTextIcon className="size-8 text-foreground-subtlest" />
-            <p className="mt-3 text-ui-base font-medium text-foreground">{emptyStateCopy.title}</p>
-            <p className="mt-1 text-ui-base text-foreground-subtle">{emptyStateCopy.description}</p>
+          <div className="min-h-0 flex-1">
+            {currentChanges.length > 0 ? (
+              <div ref={changeListScrollRef} className="h-full min-h-0 w-full overflow-auto">
+                <div
+                  className="relative w-full min-w-0"
+                  style={{ height: `${changeRowVirtualizer.getTotalSize()}px` }}
+                >
+                  {virtualChangeRows.map((virtualRow) => {
+                    const change = currentChanges[virtualRow.index];
+                    if (!change) {
+                      return null;
+                    }
+
+                    const isExpanded = expandedPath === change.path;
+                    const diffCacheKey = getDiffCacheKey(currentDataset.id, change.path);
+                    const cachedDiffState = diffStateByKey[diffCacheKey];
+                    const diffState = change.diff ?? cachedDiffState?.diff ?? null;
+                    const isDiffLoading =
+                      isExpanded && !change.diff && (!cachedDiffState || cachedDiffState.loading);
+
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        ref={changeRowVirtualizer.measureElement}
+                        className="absolute left-0 w-full min-w-0"
+                        data-git-pane-change-virtual-row
+                        data-index={virtualRow.index}
+                        // transform 定位会让行内 sticky 文件名失效，展开大 diff 后标题不再置顶。
+                        // 改用 top 偏移保留虚拟滚动布局，同时让 sticky 继续以滚动容器为参照。
+                        style={{ top: `${virtualRow.start}px` }}
+                      >
+                        <GitPaneChangeCard
+                          change={change}
+                          contextMenuLabels={contextMenuLabels}
+                          diffState={diffState}
+                          isDiffLoading={isDiffLoading}
+                          isExpanded={isExpanded}
+                          canRevealInFileManager={fileActions.canRevealInFileManager({
+                            path: resolveChangePath(change),
+                            deleted: change.kind === "deleted",
+                          })}
+                          codePreviewSettings={codePreviewSettings}
+                          resolvedTheme={resolvedTheme}
+                          onCopyAbsolutePath={handleCopyAbsolutePath}
+                          onCopyRelativePath={handleCopyRelativePath}
+                          onOpenChange={handleExpandChange}
+                          onRevealInFileManager={handleRevealChangeInFileManager}
+                          onRevealInFileTree={
+                            onRevealFileInTree ? handleRevealChangeInFileTree : undefined
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                <FileTextIcon className="size-8 text-foreground-subtlest" />
+                <p className="mt-3 text-ui-base font-medium text-foreground">
+                  {emptyStateCopy.title}
+                </p>
+                <p className="mt-1 text-ui-base text-foreground-subtle">
+                  {emptyStateCopy.description}
+                </p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {historyCollapsed ? (
+        <div className="border-t border-border">
+          <GitPaneSectionHeader
+            label={historySectionLabel}
+            collapsed
+            toggleLabel={intl.formatMessage(
+              { id: "git.panel.expandSection" },
+              { section: historySectionLabel },
+            )}
+            onToggle={onToggleSection ? () => onToggleSection("history", false) : undefined}
+          />
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col border-t border-border">
+          <GitPaneSectionHeader
+            label={historySectionLabel}
+            collapsed={false}
+            toggleLabel={intl.formatMessage(
+              { id: "git.panel.collapseSection" },
+              { section: historySectionLabel },
+            )}
+            onToggle={onToggleSection ? () => onToggleSection("history", true) : undefined}
+            actions={
+              // 图谱自己不再有标题行，刷新并入区块标题右侧；折叠时不取数，也就没有可刷新的内容。
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={historyRefreshing}
+                aria-label={intl.formatMessage({ id: "gitGraph.refresh" })}
+                title={intl.formatMessage({ id: "gitGraph.refresh" })}
+                className="shrink-0 text-foreground-subtle hover:text-foreground"
+                onClick={commitGraph.refresh}
+              >
+                <RefreshCw className={cn("size-3.5", historyRefreshing && "animate-spin")} />
+              </Button>
+            }
+          />
+          <div className="min-h-0 flex-1">
+            {commitGraph.errorMessage && commitGraph.commits.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                <p className="text-ui-base text-foreground-subtle">{commitGraph.errorMessage}</p>
+              </div>
+            ) : (
+              <GitGraphPane
+                workspacePath={workspacePath}
+                workspaceIdentity={workspaceIdentity}
+                remoteSessionId={workspaceRemoteSessionId}
+                commits={commitGraph.commits}
+                hasMore={commitGraph.hasMore}
+                loadingMore={commitGraph.loadingMore}
+                selectedCommitHash={commitGraph.selectedCommitHash}
+                onSelectCommit={commitGraph.selectCommit}
+                onLoadMore={commitGraph.loadMore}
+              />
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

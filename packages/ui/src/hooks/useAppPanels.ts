@@ -44,6 +44,8 @@ import {
   openCodeViewerSidePane,
   openCodeViewerSidePanes,
   activateGitSidePane,
+  setGitSidePaneSectionCollapsed,
+  type GitSidePaneScope,
   getActiveSidePaneTab,
   getVisibleSidePaneTabs,
   sidePaneOwnerKey,
@@ -173,6 +175,16 @@ export function useAppPanels(options: {
   } = options;
   const supportsEmbeddedBrowser = explicitSupportsEmbeddedBrowser ?? Boolean(isDesktop);
   const activeWorkspaceKey = workspaceIdentity?.trim() || workspaceAbsPath;
+  // Git 面板按项目隔离；scope 在创建 tab 时冻结，之后的 toggle/close 都按同一个 key 定位。
+  const gitSidePaneScope = useMemo<GitSidePaneScope>(
+    () => ({
+      workspaceKey: activeWorkspaceKey,
+      workspacePath: workspaceAbsPath,
+      ...(workspaceIdentity ? { workspaceIdentity } : {}),
+      ...(workspaceRemoteSessionId ? { remoteSessionId: workspaceRemoteSessionId } : {}),
+    }),
+    [activeWorkspaceKey, workspaceAbsPath, workspaceIdentity, workspaceRemoteSessionId],
+  );
   const { zcodeAgentService, zcodeSessionService } = useServices();
   const isOfficeMode = useIsOfficeMode();
   const sidePaneMemoryKey = useMemo(
@@ -705,7 +717,7 @@ export function useAppPanels(options: {
     commitOpenedSidePaneState((current) => {
       if (isOfficeMode && !current?.tabs.some((tab) => tab.type === "git")) return current;
       const closingActiveGit = getActiveSidePaneTab(current)?.type === "git";
-      const next = toggleGitSidePane(current);
+      const next = toggleGitSidePane(current, gitSidePaneScope);
       if (closingActiveGit) {
         syncSidePaneCollapsedWithTabs(next);
       } else {
@@ -720,6 +732,7 @@ export function useAppPanels(options: {
   }, [
     isOfficeMode,
     commitOpenedSidePaneState,
+    gitSidePaneScope,
     revealSidePaneForCurrentOwner,
     syncSidePaneCollapsedWithTabs,
     workspaceAbsPath,
@@ -728,7 +741,7 @@ export function useAppPanels(options: {
   const handleOpenGit = useCallback(() => {
     commitOpenedSidePaneState((current) => {
       if (isOfficeMode && !current?.tabs.some((tab) => tab.type === "git")) return current;
-      const next = activateGitSidePane(current);
+      const next = activateGitSidePane(current, gitSidePaneScope);
       // 文件变更查找只需要“确保 Git 面板打开”，不能复用 toggle。
       // 如果当前已经在 Git tab 上，toggle 会把它关掉，导致切到文件变更范围反而看不到内容。
       revealSidePaneForCurrentOwner();
@@ -737,7 +750,13 @@ export function useAppPanels(options: {
       );
       return next;
     });
-  }, [isOfficeMode, commitOpenedSidePaneState, revealSidePaneForCurrentOwner, workspaceAbsPath]);
+  }, [
+    isOfficeMode,
+    commitOpenedSidePaneState,
+    gitSidePaneScope,
+    revealSidePaneForCurrentOwner,
+    workspaceAbsPath,
+  ]);
 
   const handleOpenTreemapping = useCallback(
     (source?: TreemappingSidePaneTab["source"]) => {
@@ -1280,6 +1299,15 @@ export function useAppPanels(options: {
     });
   }, [commitSidePaneState, syncSidePaneCollapsedWithTabs, workspaceAbsPath]);
 
+  const handleToggleGitSection = useCallback(
+    (tabId: string, section: "changes" | "history", collapsed: boolean) => {
+      commitSidePaneState((current) =>
+        setGitSidePaneSectionCollapsed(current, { tabId, section, collapsed }),
+      );
+    },
+    [commitSidePaneState],
+  );
+
   const handleActivateSidePaneTab = useCallback(
     (tabId: string) => {
       const tab = latestSidePaneMemoryRef.current.sidePaneState?.tabs.find(
@@ -1605,6 +1633,7 @@ export function useAppPanels(options: {
     handleToggleSidePaneCollapse,
     handleCloseCodeViewer,
     handleCloseGit,
+    handleToggleGitSection,
     handleActivateSidePaneTab,
     handleReorderSidePaneTab,
     handleCloseSidePaneTab,

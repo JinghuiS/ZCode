@@ -110,6 +110,8 @@ type OpenTabLauncherItem = {
   label: string;
   icon: LucideIcon;
   onOpen: () => void;
+  /** 未提交变更数；0 或缺省不显示徽标。 */
+  badgeCount?: number;
 };
 const EMPTY_SIDE_PANE_TABS: WorkspaceSidePaneState["tabs"] = [];
 const EMPTY_TABS_SCROLL_MASK_EDGES: TabsScrollMaskEdges = {
@@ -291,6 +293,7 @@ export function AnimatedSidePanePanel({
   activeTaskId,
   sidePaneOwnerId,
   gitState,
+  gitDirtyFileCount = 0,
   activeGitSourceId,
   panelRef,
   panelElementRef,
@@ -317,6 +320,7 @@ export function AnimatedSidePanePanel({
   onOpenReviewTab,
   onOpenSelectionSideConversation,
   onRevealGitFileInTree,
+  onToggleGitSection,
   onOpenBrowserUrl,
   onOpenCodeViewer,
   onOpenFileLink,
@@ -356,6 +360,7 @@ export function AnimatedSidePanePanel({
   activeTaskId: string | null;
   sidePaneOwnerId: string | null;
   gitState: ReturnType<typeof import("@/hooks/useGitRepository.js").useGitRepository>;
+  gitDirtyFileCount?: number;
   activeGitSourceId: GitChangeSourceId;
   panelRef: RefObject<PanelImperativeHandle | null>;
   panelElementRef: RefObject<HTMLDivElement | null>;
@@ -382,6 +387,7 @@ export function AnimatedSidePanePanel({
   onOpenReviewTab: () => void;
   onOpenSelectionSideConversation: () => void;
   onRevealGitFileInTree?: (path: string) => void;
+  onToggleGitSection?: (tabId: string, section: "changes" | "history", collapsed: boolean) => void;
   onOpenBrowserUrl: (url: string) => void;
   onOpenCodeViewer: (source: CodeViewerSource) => void;
   onOpenFileLink?: (target: MessageFileLinkTarget) => void;
@@ -712,7 +718,12 @@ export function AnimatedSidePanePanel({
             }}
           >
             <FileDiffIcon className="size-4" />
-            <span>{intl.formatMessage({ id: "sidePane.review" })}</span>
+            <span className="flex-1">{intl.formatMessage({ id: "sidePane.review" })}</span>
+            {gitDirtyFileCount > 0 ? (
+              <span className="font-mono text-ui-sm tabular-nums text-foreground-subtle">
+                {gitDirtyFileCount}
+              </span>
+            ) : null}
           </DropdownMenuItem>
         ) : null}
         {/* 画板入口未启用 */}
@@ -772,6 +783,7 @@ export function AnimatedSidePanePanel({
       label: intl.formatMessage({ id: "sidePane.review" }),
       icon: FileDiffIcon,
       onOpen: onOpenReviewTab,
+      badgeCount: gitDirtyFileCount,
     },
     terminal: {
       id: "terminal",
@@ -849,6 +861,11 @@ export function AnimatedSidePanePanel({
                   <span className="side-pane-open-tab-button-label min-w-0 flex-1 truncate text-left">
                     {item.label}
                   </span>
+                  {item.badgeCount ? (
+                    <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 font-mono text-ui-sm tabular-nums text-foreground-subtle">
+                      {item.badgeCount}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -1208,9 +1225,11 @@ export function AnimatedSidePanePanel({
                           />
                         ) : tab.type === "git" ? (
                           <GitPane
-                            workspacePath={workspaceAbsPath}
-                            workspaceIdentity={workspaceIdentity}
-                            workspaceRemoteSessionId={workspaceRemoteSessionId}
+                            // Git 面板按项目隔离：workspace 身份取自 tab 自身，
+                            // 不再读外壳变量，否则侧栏里别的项目的 Git tab 会渲染成当前项目。
+                            workspacePath={tab.workspacePath}
+                            workspaceIdentity={tab.workspaceIdentity}
+                            workspaceRemoteSessionId={tab.remoteSessionId ?? undefined}
                             gitState={gitState}
                             isDesktop={isDesktop}
                             selectedSourceId={activeGitSourceId}
@@ -1222,6 +1241,14 @@ export function AnimatedSidePanePanel({
                             onClose={onCloseGit}
                             onRefresh={onRefreshGit}
                             onRevealFileInTree={onRevealGitFileInTree}
+                            changesCollapsed={tab.changesCollapsed}
+                            historyCollapsed={tab.historyCollapsed}
+                            onToggleSection={
+                              onToggleGitSection
+                                ? (section, collapsed) =>
+                                    onToggleGitSection(tab.id, section, collapsed)
+                                : undefined
+                            }
                           />
                         ) : tab.type === "treemapping" ? (
                           <TreemappingPane

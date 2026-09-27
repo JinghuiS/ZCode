@@ -320,6 +320,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   handleOpenWorkflowArtifact,
   handleCloseCodeViewer,
   handleCloseGit,
+  handleToggleGitSection,
   handleActivateSidePaneTab,
   handleReorderSidePaneTab,
   handleCloseSidePaneTab,
@@ -1453,6 +1454,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       onFileChangeFindMatchCountChange={onFileChangeFindMatchCountChange}
       onCloseCodeViewer={handleCloseCodeViewer}
       onCloseGit={handleCloseGit}
+      onToggleGitSection={handleToggleGitSection}
+      gitDirtyFileCount={gitDirtyFileCount}
       onActivateTab={handleActivateSidePaneTab}
       onReorderTab={handleReorderSidePaneTab}
       onCloseTab={handleCloseSidePaneTab}

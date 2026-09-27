@@ -246,6 +246,7 @@ export function App({
     handleToggleSidePaneCollapse,
     handleCloseCodeViewer,
     handleCloseGit,
+    handleToggleGitSection,
     handleActivateSidePaneTab,
     handleReorderSidePaneTab,
     handleCloseSidePaneTab,
@@ -1255,6 +1256,7 @@ export function App({
         handleOpenWorkflowArtifact={handleOpenWorkflowArtifact}
         handleCloseCodeViewer={handleCloseCodeViewer}
         handleCloseGit={handleCloseGit}
+        handleToggleGitSection={handleToggleGitSection}
         handleActivateSidePaneTab={handleActivateSidePaneTab}
         handleReorderSidePaneTab={handleReorderSidePaneTab}
         handleCloseSidePaneTab={handleCloseSidePaneTab}

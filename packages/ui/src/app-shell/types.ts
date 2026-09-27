@@ -259,6 +259,11 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   handleOpenWorkflowArtifact: (request: OpenScopedWorkflowArtifactSideTabRequest) => void;
   handleCloseCodeViewer: () => void;
   handleCloseGit: () => void;
+  handleToggleGitSection: (
+    tabId: string,
+    section: "changes" | "history",
+    collapsed: boolean,
+  ) => void;
   handleActivateSidePaneTab: (tabId: string) => void;
   handleReorderSidePaneTab: (activeTabId: string, overTabId: string) => void;
   handleCloseSidePaneTab: (tabId: string) => void;

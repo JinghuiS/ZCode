@@ -29,8 +29,15 @@ export interface GitSidePaneTab {
   id: "git";
   type: "git";
   ownerTaskId?: string | null;
-  workspaceKey?: string | null;
+  /** 工作区隔离 key（workspaceIdentity || workspacePath）；Git 面板按项目独立。 */
+  workspaceKey: string;
+  workspacePath: string;
+  workspaceIdentity?: string;
+  remoteSessionId?: string | null;
   openedAt?: number;
+  /** 变更/历史两个区块的折叠态；手风琴语义，最多一个展开，缺省为变更展开、历史折叠。 */
+  changesCollapsed?: boolean;
+  historyCollapsed?: boolean;
 }
 
 export interface CodeViewerSidePaneTab {
@@ -646,8 +653,31 @@ function createBrowserSidePaneTab(options?: {
   };
 }
 
-function createGitSidePaneTab(): GitSidePaneTab {
-  return { id: "git", type: "git", openedAt: Date.now() };
+export interface GitSidePaneScope {
+  workspaceKey: string;
+  workspacePath: string;
+  workspaceIdentity?: string;
+  remoteSessionId?: string | null;
+}
+
+function createGitSidePaneTab(scope: GitSidePaneScope): GitSidePaneTab {
+  return {
+    // side pane 记忆本身按项目身份分桶（buildTaskSidePaneMemoryKey），
+    // 同一份记忆里不会混入别的项目，所以单例 id 足够，不再把 workspaceKey 编进去。
+    id: "git",
+    type: "git",
+    openedAt: Date.now(),
+    workspaceKey: scope.workspaceKey,
+    workspacePath: scope.workspacePath,
+    ...(scope.workspaceIdentity ? { workspaceIdentity: scope.workspaceIdentity } : {}),
+    // remoteSessionId 必须在创建时冻结：close 侧按 tab 上的值比对 scope，
+    // 后补会让远程项目的 Git tab 关不掉（与 browser tab 同一个坑）。
+    ...(scope.remoteSessionId ? { remoteSessionId: scope.remoteSessionId } : {}),
+    // 两个区块是手风琴（最多一个展开），初始状态必须是其中恰好一个展开：
+    // 变更承载暂存与提交，是默认工作面；历史折叠着点开即占满整块高度。
+    changesCollapsed: false,
+    historyCollapsed: true,
+  };
 }
 
 function createModelTrajectorySidePaneTab(options: {
@@ -1556,8 +1586,65 @@ export function openCodeViewerSidePanes(
 
 export function activateGitSidePane(
   current: WorkspaceSidePaneState | null,
+  scope: GitSidePaneScope,
 ): WorkspaceSidePaneState {
-  return activateSidePaneTab(current, createGitSidePaneTab());
+  const tab = createGitSidePaneTab(scope);
+  // activateSidePaneTab 命中同 id 时整体替换 tab，新建的 tab 折叠态是缺省值。
+  // 直接交给它会让「打开已存在的 Git 面板」重置用户折叠的区块，这里先继承既有折叠态。
+  const existing = current?.tabs.find(
+    (candidate): candidate is GitSidePaneTab => candidate.type === "git",
+  );
+  if (!existing) {
+    return activateSidePaneTab(current, tab);
+  }
+
+  return activateSidePaneTab(current, {
+    ...tab,
+    openedAt: existing.openedAt ?? tab.openedAt,
+    ...(existing.ownerTaskId !== undefined ? { ownerTaskId: existing.ownerTaskId } : {}),
+    ...(existing.changesCollapsed !== undefined
+      ? { changesCollapsed: existing.changesCollapsed }
+      : {}),
+    ...(existing.historyCollapsed !== undefined
+      ? { historyCollapsed: existing.historyCollapsed }
+      : {}),
+  });
+}
+
+/**
+ * 手风琴式折叠切换：展开一个区块就把另一个折叠，让展开的区块拿到整块高度。
+ *
+ * 两个区块不再是各自独立的折叠事实，所以不做「保留另一个区块状态」的写法：
+ * 唯一能出现的组合是「变更展开」「历史展开」和「两个都折叠」。
+ */
+export function setGitSidePaneSectionCollapsed(
+  current: WorkspaceSidePaneState | null,
+  options: { tabId: string; section: "changes" | "history"; collapsed: boolean },
+): WorkspaceSidePaneState | null {
+  if (!current) {
+    return current;
+  }
+
+  const index = current.tabs.findIndex((tab) => tab.type === "git" && tab.id === options.tabId);
+  if (index < 0) {
+    return current;
+  }
+
+  const tab = current.tabs[index] as GitSidePaneTab;
+  const nextTabs = [...current.tabs];
+  nextTabs[index] = {
+    ...tab,
+    ...(options.section === "changes"
+      ? {
+          changesCollapsed: options.collapsed,
+          ...(options.collapsed ? {} : { historyCollapsed: true }),
+        }
+      : {
+          historyCollapsed: options.collapsed,
+          ...(options.collapsed ? {} : { changesCollapsed: true }),
+        }),
+  };
+  return { ...current, tabs: nextTabs };
 }
 
 export function openWhiteboardSidePane(
@@ -2178,13 +2265,14 @@ export function toggleBrowserSidePane(
 
 export function toggleGitSidePane(
   current: WorkspaceSidePaneState | null,
+  scope: GitSidePaneScope,
 ): WorkspaceSidePaneState | null {
   const activeTab = getActiveSidePaneTab(current);
   if (activeTab?.type === "git") {
     return closeSidePaneTab(current, activeTab.id);
   }
 
-  return activateGitSidePane(current);
+  return activateGitSidePane(current, scope);
 }
 
 export function closeCodeViewerSidePane(
