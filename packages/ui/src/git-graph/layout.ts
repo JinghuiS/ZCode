@@ -15,6 +15,11 @@ export interface GitGraphLayoutOptions {
   lanePadding?: number;
   topPadding?: number;
   bottomPadding?: number;
+  /**
+   * 行下标 → 该行**之后**额外插入的像素（提交行内展开的文件清单等）。
+   * 泳道按累积偏移下移，展开行之后的提交不会与泳道错位。
+   */
+  rowGaps?: Readonly<Record<number, number>>;
 }
 
 export interface GitGraphLayoutRow {
@@ -66,6 +71,8 @@ interface PixelOptions {
   laneGap: number;
   topPadding: number;
   rowHeight: number;
+  /** rowOffsets[i] 是第 i 行之前累积插入的额外像素（含行内展开）。 */
+  rowOffsets: readonly number[];
 }
 
 const DEFAULT_ROW_HEIGHT = 42;
@@ -108,8 +115,15 @@ function buildEdgePath({
 function pointToPixels(point: GraphPoint, options: PixelOptions) {
   return {
     x: options.lanePadding + point.laneIndex * options.laneGap,
-    y: options.topPadding + point.rowIndex * options.rowHeight,
+    y:
+      options.topPadding +
+      point.rowIndex * options.rowHeight +
+      getRowOffset(point.rowIndex, options),
   };
+}
+
+function getRowOffset(rowIndex: number, options: PixelOptions): number {
+  return options.rowOffsets[rowIndex] ?? 0;
 }
 
 function createGraphPath(
@@ -206,6 +220,14 @@ export function layoutGitGraph(
   const topPadding = options.topPadding ?? DEFAULT_TOP_PADDING;
   const bottomPadding = options.bottomPadding ?? DEFAULT_BOTTOM_PADDING;
   const { vertices, vertexByHash, branchLines } = createGitGraphLayoutModel(commits);
+  const rowGaps = options.rowGaps ?? {};
+  // 行内展开的高度按行下标累积：展开行之后的每一行（含泳道点与连线）都整体下移。
+  const rowOffsets: number[] = [];
+  let accumulatedRowGap = 0;
+  for (let rowIndex = 0; rowIndex < commits.length; rowIndex += 1) {
+    rowOffsets.push(accumulatedRowGap);
+    accumulatedRowGap += Math.max(0, rowGaps[rowIndex] ?? 0);
+  }
 
   const rows = vertices.map((vertex, rowIndex): GitGraphLayoutRow => {
     const laneIndex = vertex.getLaneIndex();
@@ -215,7 +237,7 @@ export function layoutGitGraph(
       rowIndex,
       laneIndex,
       x: lanePadding + laneIndex * laneGap,
-      y: topPadding + rowIndex * rowHeight,
+      y: topPadding + rowIndex * rowHeight + (rowOffsets[rowIndex] ?? 0),
     };
   });
   const rowByHash = new Map(rows.map((row) => [row.commit.hash, row]));
@@ -229,9 +251,10 @@ export function layoutGitGraph(
     0,
   );
   const laneCount = Math.max(1, maxRowLaneIndex + 1, maxWidthLaneIndex + 1, maxLineLaneIndex + 1);
-  const height = topPadding + Math.max(0, commits.length - 1) * rowHeight + bottomPadding;
+  const height =
+    topPadding + Math.max(0, commits.length - 1) * rowHeight + accumulatedRowGap + bottomPadding;
   const width = lanePadding * 2 + (laneCount - 1) * laneGap;
-  const pixelOptions = { lanePadding, laneGap, topPadding, rowHeight };
+  const pixelOptions = { lanePadding, laneGap, topPadding, rowHeight, rowOffsets };
   const verticalLines = branchLines.filter((line) => line.from.laneIndex === line.to.laneIndex);
 
   return {

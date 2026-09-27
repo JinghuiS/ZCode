@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { GitCommitGraphCommit } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import {
   Dialog,
@@ -10,150 +8,63 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog.js";
 import { toast } from "@/components/ui/toast.js";
+import { cn } from "@/components/lib/utils.js";
 import { GitGraphPane } from "@/git-graph/GitGraphPane.js";
-import { useServices } from "@/hooks/useServices.js";
+import { useGitCommitGraph } from "@/hooks/useGitCommitGraph.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { getErrorMessage } from "@/lib/errorMessage.js";
-import { logger } from "@/logger.js";
-import { AlertCircleIcon, LoaderIcon, XIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  GitGraph as GitGraphIcon,
+  LoaderIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "lucide-react";
 
 interface GitGraphDialogProps {
   open: boolean;
   workspacePath: string;
+  /** 远程项目必须带上身份，否则图谱会落到本机仓库。 */
+  workspaceIdentity?: string;
+  remoteSessionId?: string | null;
   onOpenChange: (nextOpen: boolean) => void;
 }
 
-const GIT_GRAPH_PAGE_SIZE = 50;
-
-export function GitGraphDialog({ open, workspacePath, onOpenChange }: GitGraphDialogProps) {
-  const { gitService } = useServices();
+export function GitGraphDialog({
+  open,
+  workspacePath,
+  workspaceIdentity,
+  remoteSessionId = null,
+  onOpenChange,
+}: GitGraphDialogProps) {
   const { intl } = useZCodeIntl();
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [commits, setCommits] = useState<GitCommitGraphCommit[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(null);
-  const loadingMoreRef = useRef(false);
-
-  const resetGraphState = useCallback(() => {
-    setLoading(false);
-    setLoadingMore(false);
-    setRefreshing(false);
-    loadingMoreRef.current = false;
-    setErrorMessage(null);
-  }, []);
-
-  const loadInitialCommits = useCallback(async () => {
-    setLoading(true);
-    setLoadingMore(false);
-    setRefreshing(false);
-    loadingMoreRef.current = false;
-    setErrorMessage(null);
-    setCommits([]);
-    setHasMore(false);
-    setSelectedCommitHash(null);
-
-    try {
-      const result = await gitService.getCommitGraph({
-        workspacePath,
-        maxCount: GIT_GRAPH_PAGE_SIZE,
-        skip: 0,
-      });
-      setCommits(result.commits);
-      setHasMore(result.hasMore);
-      setSelectedCommitHash(result.commits[0]?.hash ?? null);
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      logger.warn("[GitGraphDialog] 读取 Git Graph 失败", {
-        workspacePath,
-        error: message,
-      });
-      setErrorMessage(
-        intl.formatMessage({ id: "gitGraph.error.requestFailed" }, { error: message }),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [gitService, intl, workspacePath]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    void loadInitialCommits();
-  }, [loadInitialCommits, open]);
-
-  const refreshCommits = useCallback(async () => {
-    if (loading || loadingMore || refreshing) {
-      return;
-    }
-
-    setRefreshing(true);
-    setErrorMessage(null);
-
-    try {
-      const result = await gitService.getCommitGraph({
-        workspacePath,
-        maxCount: GIT_GRAPH_PAGE_SIZE,
-        skip: 0,
-      });
-      setCommits(result.commits);
-      setHasMore(result.hasMore);
-      setSelectedCommitHash(result.commits[0]?.hash ?? null);
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      logger.warn("[GitGraphDialog] 刷新 Git Graph 失败", {
-        workspacePath,
-        error: message,
-      });
-      toast(intl.formatMessage({ id: "gitGraph.refreshFailed" }, { error: message }));
-    } finally {
-      setRefreshing(false);
-    }
-  }, [gitService, intl, loading, loadingMore, refreshing, workspacePath]);
-
-  const loadMoreCommits = useCallback(async () => {
-    if (loading || loadingMore || refreshing || loadingMoreRef.current || !hasMore) {
-      return;
-    }
-
-    loadingMoreRef.current = true;
-    setLoadingMore(true);
-    setErrorMessage(null);
-
-    try {
-      const result = await gitService.getCommitGraph({
-        workspacePath,
-        maxCount: GIT_GRAPH_PAGE_SIZE,
-        skip: commits.length,
-      });
-      setCommits((currentCommits) => [...currentCommits, ...result.commits]);
-      setHasMore(result.hasMore);
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      logger.warn("[GitGraphDialog] 读取更多 Git Graph 失败", {
-        workspacePath,
-        loadedCommitCount: commits.length,
-        error: message,
-      });
-      setErrorMessage(
-        intl.formatMessage({ id: "gitGraph.error.requestFailed" }, { error: message }),
-      );
-    } finally {
-      loadingMoreRef.current = false;
-      setLoadingMore(false);
-    }
-  }, [commits.length, gitService, hasMore, intl, loading, loadingMore, refreshing, workspacePath]);
+  const commitGraph = useGitCommitGraph({
+    workspacePath,
+    workspaceIdentity,
+    remoteSessionId,
+    enabled: open,
+    logScope: "GitGraphDialog",
+    onError: toast,
+  });
+  const {
+    commits,
+    hasMore,
+    loading,
+    loadingMore,
+    refreshing,
+    errorMessage,
+    selectedCommitHash,
+    selectCommit,
+    refresh,
+    loadMore,
+    reset,
+  } = commitGraph;
 
   return (
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) {
-          resetGraphState();
+          reset();
         }
         onOpenChange(nextOpen);
       }}
@@ -168,6 +79,29 @@ export function GitGraphDialog({ open, workspacePath, onOpenChange }: GitGraphDi
             {intl.formatMessage({ id: "gitGraph.dialogDescription" })}
           </DialogDescription>
         </DialogHeader>
+        {/* 图谱本体不再自带标题行，对话框自己出标题与刷新，标题也顺带成为可见的弹窗标题。 */}
+        <div className="flex min-w-0 items-center justify-between gap-3 border-b border-border bg-surface/40 px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <GitGraphIcon className="size-3.5 shrink-0 text-foreground" />
+            <span className="truncate text-ui-base font-medium">
+              {intl.formatMessage({ id: "gitGraph.title" })}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={refreshing}
+              aria-label={intl.formatMessage({ id: "gitGraph.refresh" })}
+              title={intl.formatMessage({ id: "gitGraph.refresh" })}
+              className="text-foreground-subtle hover:text-foreground"
+              onClick={refresh}
+            >
+              <RefreshCwIcon className={cn("size-3.5", refreshing && "animate-spin")} />
+            </Button>
+          </div>
+        </div>
         <DialogClose asChild>
           <Button
             type="button"
@@ -194,14 +128,15 @@ export function GitGraphDialog({ open, workspacePath, onOpenChange }: GitGraphDi
           </div>
         ) : (
           <GitGraphPane
+            workspacePath={workspacePath}
+            workspaceIdentity={workspaceIdentity}
+            remoteSessionId={remoteSessionId}
             commits={commits}
             hasMore={hasMore}
             loadingMore={loadingMore}
-            refreshing={refreshing}
             selectedCommitHash={selectedCommitHash}
-            onSelectCommit={setSelectedCommitHash}
-            onLoadMore={loadMoreCommits}
-            onRefresh={refreshCommits}
+            onSelectCommit={selectCommit}
+            onLoadMore={loadMore}
           />
         )}
       </DialogContent>
