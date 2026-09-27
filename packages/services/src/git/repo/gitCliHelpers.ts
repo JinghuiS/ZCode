@@ -701,6 +701,17 @@ export async function normalizeInputPath(
   return repoRelativePath;
 }
 
+export function normalizeCommitHash(rawCommitHash: string): string {
+  const commitHash = rawCommitHash.trim();
+  // commit hash 会直接拼进 git argv。限制为十六进制对象名，避免传入的字符串
+  // 被 git 当成选项或 ref 表达式（如 --help、@{-1}）解析。
+  if (!/^[0-9a-f]{4,64}$/i.test(commitHash)) {
+    throw new Error(`Invalid commit hash: ${rawCommitHash}`);
+  }
+
+  return commitHash;
+}
+
 export function ensureRepositoryAvailable(
   resolution: GitResolvedRepository,
   label: string,

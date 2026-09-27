@@ -1,14 +1,20 @@
 import { resolve } from "node:path";
-import type { GitBranchComparison, GitFileChange, GitChangeSectionId } from "@zcode/shared";
+import type {
+  GitBranchComparison,
+  GitCommitFileChange,
+  GitFileChange,
+  GitChangeSectionId,
+} from "@zcode/shared";
 import { isPathInWorkspaceScope, normalizeGitPath, toWorkspaceRelativeGitPath } from "./config.js";
 import { filterCommitMessageFilesByCurrentSession } from "./commitMessageFileScope.js";
 import type { IGitService } from "./git.js";
 import type { GitCommitMessageGenerator } from "./gitCommitMessageGenerator.js";
 import {
   createGitCliRepo,
-  type GitBranchComparisonChange,
   type GitBranchComparisonSnapshot,
   type GitCliRepo,
+  type GitCommitChangesSnapshot,
+  type GitNumstatChange,
   type GitStatusEntry,
   type GitStatusSnapshot,
 } from "./repo/gitCliRepo.js";
@@ -122,7 +128,7 @@ function getChangesForSource(
 
 function toBranchComparisonChange(
   snapshot: GitBranchComparisonSnapshot,
-  change: GitBranchComparisonChange,
+  change: GitNumstatChange,
 ): GitFileChange | null {
   if (!matchesWorkspaceScope(snapshot.resolution.workspaceInRepoPath, change)) {
     return null;
@@ -142,6 +148,31 @@ function toBranchComparisonChange(
     isStaged: false,
     isUntracked: false,
     isConflicted: false,
+  };
+}
+
+function toCommitFileChange(
+  snapshot: GitCommitChangesSnapshot,
+  change: GitNumstatChange,
+): GitCommitFileChange | null {
+  // 与「分支」来源一致：workspace 是仓库子目录时只展示该目录内的文件。
+  if (!matchesWorkspaceScope(snapshot.resolution.workspaceInRepoPath, change)) {
+    return null;
+  }
+
+  return {
+    path: toAbsolutePath(snapshot.resolution.repoRoot, change.path),
+    repoRelativePath: change.path,
+    workspaceRelativePath: toWorkspaceRelativeGitPath(
+      change.path,
+      snapshot.resolution.workspaceInRepoPath,
+    ),
+    originalWorkspaceRelativePath: change.originalPath
+      ? toWorkspaceRelativeGitPath(change.originalPath, snapshot.resolution.workspaceInRepoPath)
+      : null,
+    kind: change.kind,
+    added: change.added,
+    removed: change.removed,
   };
 }
 
@@ -196,6 +227,16 @@ export function createGitService(options?: {
       return {
         commits: snapshot.commits,
         hasMore: snapshot.hasMore,
+      };
+    },
+
+    async getCommitChanges(params) {
+      const snapshot = await repo.getCommitChanges(params.workspacePath, params.commitHash);
+      return {
+        commitHash: snapshot.commitHash,
+        files: snapshot.changes
+          .map((change) => toCommitFileChange(snapshot, change))
+          .filter((change): change is GitCommitFileChange => Boolean(change)),
       };
     },
 

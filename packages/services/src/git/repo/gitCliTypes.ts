@@ -28,7 +28,7 @@ export interface GitStatusEntry {
   isConflicted: boolean;
 }
 
-export interface GitBranchComparisonChange {
+export interface GitNumstatChange {
   path: string;
   originalPath: string | null;
   kind: GitChangeKind;
@@ -59,13 +59,19 @@ export interface GitBranchComparisonSnapshot {
   baseRef: string | null;
   headRef: string | null;
   comparisonLabel: string | null;
-  changes: GitBranchComparisonChange[];
+  changes: GitNumstatChange[];
 }
 
 export interface GitCommitGraphSnapshot {
   resolution: GitResolvedRepository;
   commits: GitCommitGraphCommit[];
   hasMore: boolean;
+}
+
+export interface GitCommitChangesSnapshot {
+  resolution: GitResolvedRepository;
+  commitHash: string;
+  changes: GitNumstatChange[];
 }
 
 export interface GitCliRepo {
@@ -78,6 +84,7 @@ export interface GitCliRepo {
     maxCount?: number,
     skip?: number,
   ): Promise<GitCommitGraphSnapshot>;
+  getCommitChanges(workspacePath: string, commitHash: string): Promise<GitCommitChangesSnapshot>;
   getIgnoredPaths(workspacePath: string, paths: string[]): Promise<string[]>;
   listLocalBranches(workspacePath: string): Promise<GitLocalBranchListResult>;
   switchBranch(workspacePath: string, targetBranchName: string): Promise<GitBranchMutationResult>;

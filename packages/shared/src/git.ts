@@ -123,6 +123,26 @@ export interface GitCommitGraphResult {
   hasMore: boolean;
 }
 
+export interface GitCommitChangesRequest extends GitRepositoryRequest {
+  commitHash: string;
+}
+
+export interface GitCommitFileChange {
+  path: string;
+  repoRelativePath: string;
+  workspaceRelativePath: string;
+  /** 重命名来源的展示路径：workspace 相对，落在 workspace 之外时为仓库相对；非重命名为 null。 */
+  originalWorkspaceRelativePath: string | null;
+  kind: GitChangeKind;
+  added: number;
+  removed: number;
+}
+
+export interface GitCommitChangesResult {
+  commitHash: string;
+  files: GitCommitFileChange[];
+}
+
 export interface GitRefreshRequest extends GitRepositoryRequest {
   includeIdentity?: boolean;
   includeBranchComparison?: boolean;

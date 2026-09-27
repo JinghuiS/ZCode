@@ -41,6 +41,7 @@ import {
   inferKindFromNumstat,
   isMissingWorkingDirectoryResult,
   isNotRepositoryResult,
+  normalizeCommitHash,
   normalizeInputPath,
   parseGitBranchMutationIssues,
   parseGitConfigValue,
@@ -51,19 +52,21 @@ import {
 } from "./gitCliHelpers.js";
 import {
   createEmptySummary,
-  type GitBranchComparisonChange,
   type GitBranchComparisonSnapshot,
   type GitCliRepo,
+  type GitCommitChangesSnapshot,
   type GitCommitGraphSnapshot,
+  type GitNumstatChange,
   type GitResolvedRepository,
   type GitStatusSnapshot,
 } from "./gitCliTypes.js";
 
 export type {
-  GitBranchComparisonChange,
   GitBranchComparisonSnapshot,
   GitCliRepo,
+  GitCommitChangesSnapshot,
   GitLineStat,
+  GitNumstatChange,
   GitResolvedRepository,
   GitStatusEntry,
   GitStatusSnapshot,
@@ -494,6 +497,16 @@ function parseGitGraphRecords(stdout: string): GitCommitGraphCommit[] {
       };
     })
     .filter((commit): commit is GitCommitGraphCommit => Boolean(commit));
+}
+
+function toNumstatChanges(stdout: string): GitNumstatChange[] {
+  return Array.from(parseNumstat(stdout).entries()).map(([path, stat]) => ({
+    path,
+    originalPath: stat.originalPath ?? null,
+    kind: inferKindFromNumstat(stat),
+    added: stat.added,
+    removed: stat.removed,
+  }));
 }
 
 function parseTrackingRemoteName(trackingBranchName: string | null): string | null {
@@ -1068,6 +1081,61 @@ export function createGitCliRepo(options?: { commandProvider?: GitCommandProvide
       };
     },
 
+    async getCommitChanges(
+      workspacePath: string,
+      commitHash: string,
+    ): Promise<GitCommitChangesSnapshot> {
+      const resolution = await this.resolveRepository(workspacePath);
+      const requestedCommitHash = normalizeCommitHash(commitHash);
+      if (!resolution.isGitAvailable || !resolution.isRepository) {
+        return { resolution, commitHash: requestedCommitHash, changes: [] };
+      }
+
+      // 合并提交在 `git diff-tree` 下默认输出空结果（它按“相对所有父提交”的合并语义处理）。
+      // “这次提交改了哪些文件”的通用语义是相对第一父提交，所以这里先解析父提交再显式对比两棵树。
+      const parentsResult = await commandProvider.run({
+        cwd: resolution.repoRoot,
+        args: ["rev-list", "--parents", "-n", "1", requestedCommitHash],
+        timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+        maxOutputBytes: DEFAULT_GIT_OUTPUT_BYTES,
+      });
+      const resolvedFields = ensureGitCommandSucceeded("git rev-list --parents", parentsResult)
+        .stdout.trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      const resolvedCommitHash = resolvedFields[0];
+      if (!resolvedCommitHash) {
+        throw new Error(`Commit not found: ${requestedCommitHash}`);
+      }
+
+      const firstParentHash = resolvedFields[1];
+      const result = await commandProvider.run({
+        cwd: resolution.repoRoot,
+        // 根提交没有父提交，`--root` 让 diff-tree 按空树对比，避免根提交显示成“没有文件变更”。
+        args: firstParentHash
+          ? ["diff", "--numstat", "-z", "--find-renames", firstParentHash, resolvedCommitHash, "--"]
+          : [
+              "diff-tree",
+              "--root",
+              "-r",
+              "--numstat",
+              "-z",
+              "--no-commit-id",
+              resolvedCommitHash,
+              "--",
+            ],
+        timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+        maxOutputBytes: DEFAULT_GIT_OUTPUT_BYTES,
+      });
+      ensureGitCommandSucceeded("git diff --numstat commit", result);
+
+      return {
+        resolution,
+        commitHash: resolvedCommitHash,
+        changes: toNumstatChanges(result.stdout),
+      };
+    },
+
     async switchBranch(
       workspacePath: string,
       targetBranchName: string,
@@ -1399,16 +1467,6 @@ export function createGitCliRepo(options?: { commandProvider?: GitCommandProvide
       });
       ensureGitCommandSucceeded("git diff --numstat upstream...HEAD", result);
 
-      const changes = Array.from(parseNumstat(result.stdout).entries()).map(
-        ([path, stat]): GitBranchComparisonChange => ({
-          path,
-          originalPath: stat.originalPath ?? null,
-          kind: inferKindFromNumstat(stat),
-          added: stat.added,
-          removed: stat.removed,
-        }),
-      );
-
       return {
         resolution: status.resolution,
         baseRef: status.summary.trackingBranchName,
@@ -1416,7 +1474,7 @@ export function createGitCliRepo(options?: { commandProvider?: GitCommandProvide
         comparisonLabel: status.summary.branchName
           ? `${status.summary.branchName} -> ${status.summary.trackingBranchName}`
           : `HEAD -> ${status.summary.trackingBranchName}`,
-        changes,
+        changes: toNumstatChanges(result.stdout),
       };
     },
 
